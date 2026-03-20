@@ -678,33 +678,41 @@ class MAHERModelClient:
         else:
             self._gpt_oss = None
 
-        # Set primary and fallback based on config
+        # Set 3-tier chain: primary → secondary → last_resort
+        # Default: gpt-oss → metabrain → gemini
         if self.primary_provider == "gpt-oss" and self._gpt_oss:
-            self._primary  = self._gpt_oss
-            self._fallback = self._gemini
+            self._primary      = self._gpt_oss
+            self._secondary    = self._metabrain
+            self._last_resort  = self._gemini
         elif self.primary_provider == "gemini":
-            self._primary  = self._gemini
-            self._fallback = self._metabrain
+            self._primary      = self._gemini
+            self._secondary    = self._metabrain
+            self._last_resort  = self._gpt_oss or self._metabrain
+        elif self.primary_provider == "metabrain":
+            self._primary      = self._metabrain
+            self._secondary    = self._gemini
+            self._last_resort  = self._gpt_oss or self._gemini
         else:
-            self._primary  = self._metabrain
-            self._fallback = self._gemini
+            # Fallback default: gpt-oss → metabrain → gemini
+            self._primary      = self._gpt_oss or self._metabrain
+            self._secondary    = self._metabrain
+            self._last_resort  = self._gemini
+
+        # Keep _fallback as alias for secondary (backwards compatibility)
+        self._fallback = self._secondary
 
         # Log configuration
-        primary_name = self._primary.get_provider_name()
-        fallback_name = self._fallback.get_provider_name()
-        primary_available = self._primary.is_available()
-        fallback_available = self._fallback.is_available()
-
         logger.info(
-            f"Model client initialized: primary={primary_name} "
-            f"(available={primary_available}), "
-            f"fallback={fallback_name} (available={fallback_available})"
+            f"Model client initialized: "
+            f"primary={self._primary.get_provider_name()} (available={self._primary.is_available()}), "
+            f"secondary={self._secondary.get_provider_name()} (available={self._secondary.is_available()}), "
+            f"last_resort={self._last_resort.get_provider_name()} (available={self._last_resort.is_available()})"
         )
 
-        if not primary_available and not fallback_available:
+        if not any(p.is_available() for p in [self._primary, self._secondary, self._last_resort]):
             logger.warning(
                 "WARNING: No model provider is configured! "
-                "Set METABRAIN_CLIENT_ID/SECRET or GEMINI_API_KEY in .env"
+                "Set VLLM_SERVER_URL, METABRAIN_CLIENT_ID/SECRET, or GEMINI_API_KEY in .env"
             )
 
     def generate(
@@ -730,10 +738,17 @@ class MAHERModelClient:
         Returns:
             ModelResponse from whichever provider succeeded
         """
-        # Try primary provider
-        if self._primary.is_available():
-            logger.debug(f"Generating with primary: {self._primary.get_provider_name()}")
-            result = self._primary.generate(
+        providers = [
+            (self._primary,     "primary"),
+            (self._secondary,   "secondary"),
+            (self._last_resort, "last_resort"),
+        ]
+
+        for provider, tier in providers:
+            if not provider.is_available():
+                continue
+            logger.debug(f"Generating with {tier}: {provider.get_provider_name()}")
+            result = provider.generate(
                 prompt=prompt,
                 system_instruction=system_instruction,
                 temperature=temperature,
@@ -744,29 +759,11 @@ class MAHERModelClient:
             if result.success:
                 return result
             logger.warning(
-                f"Primary provider ({self._primary.get_provider_name()}) failed: "
-                f"{result.error}. Falling back..."
+                f"{tier} provider ({provider.get_provider_name()}) failed: "
+                f"{result.error}. Trying next..."
             )
 
-        # Try fallback provider
-        if self._fallback.is_available():
-            logger.info(f"Using fallback provider: {self._fallback.get_provider_name()}")
-            result = self._fallback.generate(
-                prompt=prompt,
-                system_instruction=system_instruction,
-                temperature=temperature,
-                contents=contents,
-                generation_config=generation_config,
-                response_mime_type=response_mime_type,
-            )
-            if result.success:
-                return result
-            logger.error(
-                f"Fallback provider ({self._fallback.get_provider_name()}) also failed: "
-                f"{result.error}"
-            )
-
-        # Both failed
+        # All three failed
         return ModelResponse(
             text="I apologize, but I'm currently unable to process your request. "
                  "The AI services are temporarily unavailable. Please try again shortly.",
@@ -793,10 +790,9 @@ class MAHERModelClient:
 
     def get_active_provider(self) -> str:
         """Return which provider would be used for the next call"""
-        if self._primary.is_available():
-            return self._primary.get_provider_name()
-        if self._fallback.is_available():
-            return self._fallback.get_provider_name()
+        for provider in [self._primary, self._secondary, self._last_resort]:
+            if provider.is_available():
+                return provider.get_provider_name()
         return "none"
 
     def get_status(self) -> Dict[str, Any]:
@@ -806,9 +802,13 @@ class MAHERModelClient:
                 "provider":  self._primary.get_provider_name(),
                 "available": self._primary.is_available(),
             },
-            "fallback": {
-                "provider":  self._fallback.get_provider_name(),
-                "available": self._fallback.is_available(),
+            "secondary": {
+                "provider":  self._secondary.get_provider_name(),
+                "available": self._secondary.is_available(),
+            },
+            "last_resort": {
+                "provider":  self._last_resort.get_provider_name(),
+                "available": self._last_resort.is_available(),
             },
             "active_provider": self.get_active_provider(),
         }
