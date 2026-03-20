@@ -73,26 +73,47 @@ echo ==^> Step 4: Checking environment configuration...
 if not exist "backend\.env" (
     echo [WARNING] .env file not found. Creating template...
     (
-        echo # MAHER AI Environment Configuration
+        echo # ============================================================
+        echo # MAHER AI v3 - Environment Configuration
+        echo # ============================================================
         echo.
-        echo # Required: Your Gemini API Key
-        echo GEMINI_API_KEY=your_gemini_api_key_here
+        echo # --- AI Provider Selection ---
+        echo # Fallback chain: gpt-oss -^> metabrain -^> gemini
+        echo # Set MODEL_PROVIDER to whichever is your primary provider.
+        echo MODEL_PROVIDER=gpt-oss
         echo.
-        echo # Optional: Server Configuration
+        echo # GPT-OSS / vLLM ^(self-hosted, primary^)
+        echo VLLM_SERVER_URL=
+        echo VLLM_MODEL_PATH=/home/cdsw/gpt-oss
+        echo.
+        echo # MetaBrain ^(Aramco enterprise AI, secondary^)
+        echo METABRAIN_CLIENT_ID=
+        echo METABRAIN_CLIENT_SECRET=
+        echo METABRAIN_BASE_URL=
+        echo.
+        echo # Gemini ^(Google AI, last resort fallback^)
+        echo GEMINI_API_KEY=
+        echo.
+        echo # --- Server Configuration ---
         echo HOST=0.0.0.0
         echo PORT=8080
         echo THREADS=4
         echo.
-        echo # Optional: Security
+        echo # --- Security ---
         echo SECRET_KEY=
         echo ALLOWED_ORIGINS=*
+        echo ADMIN_PASSWORD=maher_admin_2026
         echo.
-        echo # Optional: HTTPS ^(if using reverse proxy^)
+        echo # --- Optional: HTTPS ^(if using reverse proxy^) ---
         echo USE_HTTPS=false
+        echo.
+        echo # --- Optional: Redis for distributed rate limiting ---
+        echo REDIS_URL=
     ) > backend\.env
-    echo [WARNING] Created backend\.env template. PLEASE ADD YOUR GEMINI_API_KEY!
+    echo [WARNING] Created backend\.env template.
+    echo           Configure at least one AI provider key before running the server.
     echo.
-    echo Edit backend\.env and add your Gemini API key before running the server.
+    echo Edit backend\.env and set your provider credentials.
     echo.
 ) else (
     echo [OK] .env file exists
