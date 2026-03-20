@@ -1,449 +1,283 @@
-# Agent Management System - Complete Guide
+# Skills & Agent Management Guide
 
-This guide explains how to use the new agent management system that allows users to create, save, publish, and manage custom AI agents.
+This guide explains how skills and custom agents work in MAHER AI v3.
 
-## 🎯 Features
+## Overview
 
-- ✅ **Create Custom Agents** - Build your own AI assistants using the Agent Studio
-- ✅ **Save as Draft** - Save work-in-progress agents privately
-- ✅ **Publish Agents** - Make agents publicly available in the Toolroom
-- ✅ **Database Storage** - All agents stored in SQLite database
-- ✅ **System Agents** - 6 pre-built agents ready to use
-- ✅ **Knowledge Upload** - Attach PDF/DOCX/TXT files as agent memory
-- ✅ **Dynamic Toolroom** - Agents load from database, not hardcoded
+MAHER AI v3 uses two complementary mechanisms for AI-driven capabilities:
 
----
+| Mechanism | Where defined | Who manages | Loaded by |
+|-----------|--------------|-------------|-----------|
+| **File-based Skills** | `backend/skills/*.md` | Developers / admins | `skill_retriever.py` at startup |
+| **User-created Agents** | SQLite database | Users via Agent Studio | `app.py` `/api/agents` endpoint |
 
-## 🚀 Quick Start (One-Command Setup)
-
-### For Linux/Mac:
-```bash
-./setup.sh
-```
-
-### For Windows:
-```cmd
-setup.bat
-```
-
-This automated script will:
-1. ✅ Create Python virtual environment
-2. ✅ Install all backend dependencies (Flask, SQLAlchemy, etc.)
-3. ✅ Initialize SQLite database
-4. ✅ Seed database with 6 system agents
-5. ✅ Create .env template (you'll need to add your API key)
-6. ✅ Install frontend dependencies (React, Vite, etc.)
-7. ✅ Build production frontend
-
-**That's it!** Everything is set up in one go.
+Both types are callable by the Skills Orchestrator via OpenAI function-calling.
 
 ---
 
-## 🔧 Manual Setup (If Needed)
+## File-Based Skills (`backend/skills/*.md`)
 
-If you prefer to set up manually:
+### What is a Skill File?
 
-### 1. Backend Setup
+Each `.md` file in `backend/skills/` defines one AI skill. The file has two parts:
+
+1. **YAML frontmatter** (between `---` delimiters) — metadata and the `tool_schema`
+2. **Markdown body** — the system prompt sent to the model when the skill is invoked
+
+### Skill File Format
+
+```markdown
+---
+id: my-skill-id
+name: My Skill Name
+description: One-line description shown in the Toolroom.
+category: maintenance      # maintenance | safety | operations | contracts | projects | other
+icon_color: "#4f46e5"      # hex color for the Toolroom card
+status: available          # available | draft  (draft = not loaded)
+implementation_type: llm_agent
+version: "1.0.0"
+tool_schema:
+  type: function
+  function:
+    name: my_skill_function   # snake_case, max 40 chars
+    description: When to call this skill — used by the model to decide routing.
+    parameters:
+      type: object
+      properties:
+        param_one:
+          type: string
+          description: Description of the first parameter
+        param_two:
+          type: string
+          description: Optional second parameter
+          enum: ["option_a", "option_b"]
+      required:
+        - param_one
+---
+
+You are a specialized assistant for [domain]. Your task is to [description of
+what the skill does]. Always [important behavioral instructions].
+```
+
+### Built-in Skills
+
+Six skills ship with MAHER AI v3 in `backend/skills/`:
+
+| File | Skill | Category |
+|------|-------|----------|
+| `agent-1-schematic-analyst.md` | Schematic Analyst | maintenance |
+| `agent-2-procedure-writer.md` | Procedure Writer | maintenance |
+| `agent-3-incident-report-analyzer.md` | Incident Report Analyzer | safety |
+| `agent-4-contracts-assistant.md` | Contracts Assistant | contracts |
+| `agent-5-operations-copilot.md` | Operations Copilot | operations |
+| `agent-6-project-planner.md` | Project Planner | projects |
+
+### Adding a New Skill
+
+1. Create a new `.md` file in `backend/skills/`:
+   ```bash
+   touch backend/skills/my-new-skill.md
+   ```
+
+2. Add frontmatter and system prompt following the format above.
+
+3. Reload without restarting:
+   ```http
+   POST /api/skills-orchestrator/reload
+   Authorization: (admin session)
+   ```
+   Or restart the backend server.
+
+4. Verify it loaded:
+   ```bash
+   curl http://localhost:8080/api/agents | python -m json.tool
+   ```
+
+### Editing an Existing Skill
+
+Edit the `.md` file directly — no database migration or code change required. After editing, reload the skill registry (see above).
+
+### Disabling a Skill (without deleting)
+
+Set `status: draft` in the frontmatter. The skill will be skipped by `skill_retriever.py`.
+
+### Database Seeding from Skill Files
+
+`seed_db.py` reads `backend/skills/*.md` at startup to populate the SQLite `agents` table with system agents. This happens automatically the first time you run:
+
 ```bash
-# Create virtual environment
-python3 -m venv venv
-
-# Activate virtual environment
-source venv/bin/activate  # Linux/Mac
-venv\Scripts\activate     # Windows
-
-# Install dependencies
-pip install -r backend/requirements.txt
-
-# Initialize and seed database
 cd backend
 python seed_db.py
-cd ..
 ```
 
-### 2. Frontend Setup
+**Requirement:** PyYAML must be installed:
 ```bash
-# Install dependencies
-npm install
-
-# Build for production
-npm run build
+pip install pyyaml
 ```
 
-### 3. Configure Environment
-Create `backend/.env` with your Gemini API key:
-```bash
-GEMINI_API_KEY=your_actual_key_here
-HOST=0.0.0.0
-PORT=8080
-THREADS=4
+If PyYAML is not available, `seed_db.py` falls back to a minimal hardcoded list.
+
+---
+
+## User-Created Agents (Agent Studio)
+
+Users can create custom agents through the **Agent Studio** UI. These are stored in the SQLite database and work identically to skill files at runtime.
+
+### Creating a Custom Agent
+
+1. Go to the home page and click **Agent Studio**
+2. Fill out the wizard:
+   - **Agent Name** (required)
+   - **Domain / Category** (required)
+   - **Task Definition** — what the agent does
+   - **System Prompt** — behavioral instructions
+   - **Knowledge Base** — upload PDF/DOCX/TXT files (optional)
+3. Click **Save Draft** (private) or **Save & Deploy** (visible in Toolroom)
+
+### Agent Lifecycle
+
+```
+Agent Studio wizard
+        │
+        ▼
+  Save Draft ──────────────────► status: draft  (only you can see it)
+        │
+        ▼
+  Save & Deploy ───────────────► status: published → appears in Toolroom
+```
+
+### Agent Studio API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/agents` | List published agents |
+| `GET` | `/api/agents?include_drafts=true` | List all (admin) |
+| `GET` | `/api/agents/<id>` | Get single agent |
+| `POST` | `/api/agents` | Create agent |
+| `PUT` | `/api/agents/<id>` | Update agent |
+| `PUT` | `/api/agents/<id>/publish` | Publish draft |
+| `DELETE` | `/api/agents/<id>` | Delete agent |
+
+### Example: Create Agent via API
+
+```http
+POST /api/agents
+Content-Type: application/json
+
+{
+  "name": "Valve Inspector",
+  "description": "Reviews valve inspection records and flags anomalies.",
+  "systemPrompt": "You are a valve inspection specialist...",
+  "category": "maintenance",
+  "status": "published"
+}
 ```
 
 ---
 
-## 🎮 Using the System
-
-### Start the Server
-
-**Linux/Mac:**
-```bash
-./start_server.sh
-```
-
-**Windows:**
-```cmd
-start_server.bat
-```
-
-**Manual:**
-```bash
-source venv/bin/activate
-cd backend
-python run_production.py
-```
-
-Open **http://localhost:8080** in your browser.
-
----
-
-## 📝 Creating Custom Agents
-
-### Step 1: Navigate to Agent Studio
-1. Go to the homepage
-2. Click on "Agent Studio" tile
-
-### Step 2: Fill Out Agent Details
-
-**Required Fields:**
-- **Agent Name**: Give your assistant a descriptive name
-- **Agent Domain**: Choose category (maintenance, operations, safety, etc.)
-
-**Optional But Recommended:**
-- **Task Definition**: What specific job will this assistant perform?
-- **Required Expertise**: What must the assistant know?
-- **Knowledge Base**: Upload PDF/DOCX/TXT files
-- **Decision Authority**: What can it do vs when to escalate?
-- **Communication Tone**: Formal, supportive, technical?
-- **Level of Detail**: Concise or step-by-step?
-- **Safety Disclaimers**: Required warnings
-- **Escalation Path**: When to get human help?
-
-### Step 3: Test Your Agent
-- Use the chat panel on the right to test your agent
-- Refine the instructions based on responses
-
-### Step 4: Save or Publish
-
-**Save as Draft:**
-```
-Click "Save Draft" button
-→ Agent saved to database (status: draft)
-→ Only visible to you
-→ Can be edited later
-```
-
-**Save & Deploy (Publish):**
-```
-Click "Save & Deploy" button
-→ Agent saved to database (status: published)
-→ Immediately visible in Toolroom
-→ Available to all users
-```
-
----
-
-## 🗄️ Database Structure
+## Database
 
 ### Location
+
 ```
 backend/data/maher_ai.db
 ```
 
-### Agent Table Schema
-```sql
-CREATE TABLE agents (
-    id INTEGER PRIMARY KEY,
-    agent_id VARCHAR(100) UNIQUE,          -- e.g., 'agent-1', 'user-agent-abc123'
-    name VARCHAR(200),
-    description TEXT,
-    system_prompt TEXT,
-    category VARCHAR(50),
-    icon_svg TEXT,
-    icon_background_color VARCHAR(20),
-    default_provider VARCHAR(100),
-    display_provider_name VARCHAR(100),
-    status VARCHAR(20),                    -- 'draft' or 'published'
-    is_system BOOLEAN,                     -- True for built-in agents
-    created_by VARCHAR(100),               -- User tracking
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP
-);
-```
+### Agents Table (key columns)
 
-### System Agents (Pre-loaded)
-1. **Schematic Analyst** - Interprets technical drawings
-2. **Procedure Writer** - Creates SOPs
-3. **Incident Report Analyzer** - Analyzes safety incidents
-4. **Contracts Assistant** - Reviews contracts
-5. **Operations Copilot** - Supports plant operators
-6. **Project Planner** - Creates project plans
-
----
-
-## 🔌 API Endpoints
-
-### Get All Published Agents
-```http
-GET /api/agents
-Response: { success: true, agents: [...], count: 6 }
-```
-
-### Get Agents Including Drafts
-```http
-GET /api/agents?include_drafts=true
-Response: { success: true, agents: [...], count: 10 }
-```
-
-### Get Single Agent
-```http
-GET /api/agents/agent-1
-Response: { success: true, agent: {...} }
-```
-
-### Create Agent (Save Draft)
-```http
-POST /api/agents
-Body: {
-  name: "My Custom Agent",
-  description: "...",
-  systemPrompt: "...",
-  category: "maintenance",
-  status: "draft"  # or "published"
-}
-Response: { success: true, message: "...", agent: {...} }
-```
-
-### Update Agent
-```http
-PUT /api/agents/user-agent-abc123
-Body: { name: "Updated Name", ... }
-Response: { success: true, message: "...", agent: {...} }
-```
-
-### Publish Agent
-```http
-PUT /api/agents/user-agent-abc123/publish
-Response: { success: true, message: "...", agent: {...} }
-```
-
-### Delete Agent
-```http
-DELETE /api/agents/user-agent-abc123
-Response: { success: true, message: "..." }
-```
-
----
-
-## 📊 Workflow Diagram
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      AGENT LIFECYCLE                         │
-└─────────────────────────────────────────────────────────────┘
-
-   User Opens Agent Studio
-             │
-             ▼
-   Fills out wizard steps
-   (Name, Category, Task, Knowledge, etc.)
-             │
-             ▼
-   Tests agent in chat panel
-             │
-             ├──────────────────┬──────────────────┐
-             ▼                  ▼                  ▼
-      Save Draft        Save & Deploy         Discard
-             │                  │
-             ▼                  ▼
-   Saved to Database    Saved + Published
-   (status: draft)      (status: published)
-             │                  │
-             │                  ▼
-             │         Appears in Toolroom
-             │         (visible to all users)
-             │                  │
-             │                  ▼
-             │         Users can launch agent
-             │         and chat with it
-             │
-             ▼
-   Can edit and publish later
-```
-
----
-
-## 🗂️ File Structure
-
-```
-MAHER_NEW_UI/
-├── setup.sh                    # Linux/Mac automated setup
-├── setup.bat                   # Windows automated setup
-├── start_server.sh             # Linux/Mac server startup
-├── start_server.bat            # Windows server startup
-│
-├── backend/
-│   ├── app.py                  # Main Flask app with agent endpoints
-│   ├── models.py               # SQLAlchemy Agent model
-│   ├── seed_db.py              # Database initialization script
-│   ├── run_production.py       # Waitress production server
-│   ├── requirements.txt        # Python dependencies
-│   ├── .env                    # Environment config (create this!)
-│   │
-│   └── data/
-│       └── maher_ai.db         # SQLite database (auto-created)
-│
-├── components/
-│   ├── AgentStudio.tsx         # Agent creation UI (updated)
-│   └── Toolroom.tsx            # Agent listing UI (updated)
-│
-├── api.ts                      # Frontend API client (updated)
-│
-└── dist/                       # Built frontend (auto-generated)
-```
-
----
-
-## 🛠️ Development Tips
-
-### View Database Contents
-```bash
-# Using sqlite3 CLI
-sqlite3 backend/data/maher_ai.db "SELECT agent_id, name, status FROM agents;"
-
-# Or use a GUI like DB Browser for SQLite
-```
+| Column | Description |
+|--------|-------------|
+| `agent_id` | Unique ID (e.g., `agent-1`, `user-agent-abc123`) |
+| `name` | Display name |
+| `description` | Short description |
+| `system_prompt` | LLM instructions (body of skill `.md`) |
+| `category` | Domain category |
+| `status` | `draft` or `published` |
+| `is_system` | `true` for agents seeded from `skills/*.md` |
+| `tool_schema` | JSON function-calling schema |
+| `implementation_type` | `llm_agent` \| `rag_pipeline` \| `workflow` |
+| `skill_version` | Semantic version (e.g., `1.0.0`) |
 
 ### Reset Database
-```bash
-# Delete database
-rm backend/data/maher_ai.db
 
-# Re-initialize
-cd backend
-python seed_db.py
-cd ..
-```
-
-### Add More System Agents
-Edit `backend/seed_db.py` and add your agent data to `SYSTEM_AGENTS` list.
-
-### Modify Agent Schema
-1. Edit `backend/models.py`
-2. Delete `backend/data/maher_ai.db`
-3. Run `python backend/seed_db.py`
-
----
-
-## ✅ Testing the System
-
-### Test 1: Create Draft Agent
-1. Go to Agent Studio
-2. Enter agent name and category
-3. Click "Save Draft"
-4. ✓ Success message appears
-5. ✓ Agent ID is stored
-
-### Test 2: Publish Agent
-1. After saving draft, click "Save & Deploy"
-2. ✓ Success message: "Agent published! Check Toolroom"
-3. Go to Toolroom
-4. ✓ Your agent appears in the grid
-
-### Test 3: Agent Knowledge
-1. In Agent Studio, go to "Knowledge Base" step
-2. Upload a PDF/DOCX/TXT file
-3. Save and publish agent
-4. Launch agent from Toolroom
-5. Ask questions about the uploaded document
-6. ✓ Agent responds with knowledge from document
-
-### Test 4: Update Agent
-1. Create and save an agent
-2. Modify the name or description
-3. Click "Update Draft" or "Save & Deploy"
-4. ✓ Changes are saved
-5. ✓ Toolroom reflects updates
-
----
-
-## 🐛 Troubleshooting
-
-### Problem: Database not found
-**Solution:**
 ```bash
 cd backend
+rm -rf data/
 python seed_db.py
 ```
 
-### Problem: No agents in Toolroom
-**Cause:** Database not seeded or API error
+---
 
-**Solution:**
-1. Check browser console for errors
-2. Check backend logs
-3. Verify database exists: `ls backend/data/`
-4. Re-seed: `python backend/seed_db.py`
+## File Structure
 
-### Problem: "Failed to save agent"
-**Cause:** Backend API error
-
-**Solution:**
-1. Check backend logs
-2. Verify SQLAlchemy is installed: `pip list | grep SQLAlchemy`
-3. Check .env file has valid config
-4. Restart server
-
-### Problem: Frontend not updated after changes
-**Solution:**
-```bash
-npm run build
-# Restart server
+```
+MAHER-AI-V3/
+├── backend/
+│   ├── skills/                   # *** Skill definition files ***
+│   │   ├── agent-1-schematic-analyst.md
+│   │   ├── agent-2-procedure-writer.md
+│   │   ├── agent-3-incident-report-analyzer.md
+│   │   ├── agent-4-contracts-assistant.md
+│   │   ├── agent-5-operations-copilot.md
+│   │   └── agent-6-project-planner.md
+│   ├── skill_retriever.py        # Loads skills from files + registry.json
+│   ├── skills_orchestrator.py    # Orchestrates skill execution
+│   ├── skill_schema_generator.py # Auto-generates tool_schema from wizard data
+│   ├── seed_db.py                # Seeds DB from skills/*.md
+│   ├── models.py                 # SQLAlchemy Agent model
+│   └── data/
+│       └── maher_ai.db           # SQLite database
+└── components/
+    ├── AgentStudio.tsx           # Custom agent creation UI
+    └── Toolroom.tsx              # Skill/agent listing UI
 ```
 
 ---
 
-## 📚 Next Steps
+## Troubleshooting
 
-### Recommended Enhancements
-1. **User Authentication** - Multi-user support with login
-2. **Agent Versioning** - Track changes over time
-3. **Agent Analytics** - Usage stats and ratings
-4. **Agent Sharing** - Export/import agents
-5. **Advanced Knowledge** - Vector search, RAG integration
-6. **Agent Categories** - Custom categories
-7. **Agent Templates** - Pre-filled templates for common use cases
+### Skill not appearing in Toolroom
+
+1. Check `status` in frontmatter is `available` (not `draft`)
+2. Check `tool_schema` is present and correctly indented YAML
+3. Check backend logs for parse errors
+4. Call `POST /api/skills-orchestrator/reload`
+
+### `seed_db.py` says "Falling back to hardcoded agents"
+
+Install PyYAML:
+```bash
+cd backend && pip install pyyaml
+```
+
+### Database agent data is stale after editing a `.md` file
+
+The database is only seeded once (first run). To re-seed after editing skill files:
+```bash
+cd backend
+rm -rf data/
+python seed_db.py
+```
+
+Or update the agent via the API (`PUT /api/agents/<id>`).
+
+### "Skill not found in registry" error
+
+The skill is in the database but not in the `SkillRetriever` index. Reload:
+```http
+POST /api/skills-orchestrator/reload
+```
 
 ---
 
-## 🔒 Security Notes
+## Security Notes
 
-- **API Keys**: Never commit `.env` file to git (already in `.gitignore`)
-- **Database**: Backup `backend/data/maher_ai.db` regularly
-- **Rate Limiting**: Already configured (50 agent ops/hour per IP)
-- **CORS**: Configure `ALLOWED_ORIGINS` in `.env` for production
-- **System Agents**: Cannot be modified or deleted via API
-
----
-
-## 📞 Support
-
-For issues or questions:
-1. Check this guide
-2. Review `PRODUCTION_DEPLOYMENT.md`
-3. Check backend logs: `backend/maher_ai.log`
-4. Check browser console (F12)
+- System agents (from `skills/*.md`) cannot be deleted via the user-facing API
+- `ADMIN_PASSWORD` in `backend/.env` protects admin endpoints
+- Skill files should be reviewed before deployment — they control LLM behavior
+- Never commit provider credentials to source control
 
 ---
 
-**Version:** 1.0.0
-**Last Updated:** 2025-11-12
+**Version:** 3.0.0
+**Last Updated:** 2026-03-20
