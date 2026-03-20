@@ -23,12 +23,13 @@
 
 ### 🎯 Key Highlights
 
-- **🤖 Hybrid Orchestration**: Intelligently routes tasks to AI Agents, Workflows, or Tools
+- **🤖 Skills-Based Architecture**: AI skills defined as Markdown files — no code changes required
+- **🔗 3-Tier AI Fallback**: GPT-OSS (vLLM) → MetaBrain (Aramco) → Gemini — works offline-first
 - **💰 60-80% Cost Reduction**: Minimize AI API usage through smart resource allocation
 - **⚡ 10-100x Faster**: Tools and workflows execute instantly vs AI calls
 - **🔒 Enterprise Security**: Rate limiting, CORS protection, security headers
 - **📱 Responsive UI**: Beautiful interface works on all devices
-- **🎯 Extensible**: Easy to add custom workflows and tools
+- **🎯 Extensible**: Add skills by dropping a `.md` file into `backend/skills/`
 
 ---
 
@@ -63,12 +64,13 @@ The core intelligence of MAHER AI that:
 3. **Cost Estimator** - Labor, parts, and downtime calculations
 4. **Document Search** - Technical documentation search
 
-**10 AI Agents:**
-- Logistics & Planning
-- Safety & Compliance
-- Technical Support
-- Training & Simulation
-- Analytics & Insights
+**6 Built-in Skills** (defined as `backend/skills/*.md`):
+- Schematic Analyst — P&IDs and electrical diagrams
+- Procedure Writer — SOP generation
+- Incident Report Analyzer — root cause / CAPA
+- Contracts Assistant — clause review
+- Operations Copilot — alarm troubleshooting
+- Project Planner — turnaround planning
 
 ### User Interface
 
@@ -88,54 +90,58 @@ The core intelligence of MAHER AI that:
 
 - **Python** 3.10 or higher
 - **Node.js** 18 or higher
-- **Gemini API Key** ([Get one here](https://makersuite.google.com/app/apikey))
+- At least one AI provider credential (see `.env` section below)
 
 ### Option 1: Automated Setup (Recommended)
 
 **Windows:**
-```bash
-git clone https://github.com/nileshb4u/MAHER_NEW_UI.git
-cd MAHER_NEW_UI
+```cmd
+git clone https://github.com/nileshb4u/MAHER-AI-V3.git
+cd MAHER-AI-V3
 setup.bat
-# Edit .env and add your GEMINI_API_KEY
-start_server.bat
+# Edit backend\.env and configure at least one AI provider
+start.bat
 ```
 
 **Linux/Mac:**
 ```bash
-git clone https://github.com/nileshb4u/MAHER_NEW_UI.git
-cd MAHER_NEW_UI
+git clone https://github.com/nileshb4u/MAHER-AI-V3.git
+cd MAHER-AI-V3
 chmod +x setup.sh && ./setup.sh
-# Edit .env and add your GEMINI_API_KEY
+# Edit backend/.env and configure at least one AI provider
 chmod +x start_server.sh && ./start_server.sh
 ```
 
-Open: **http://localhost:8080**
+Open: **http://localhost:3000** (frontend) / **http://localhost:8080** (backend API)
 
 ### Option 2: Manual Setup
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/nileshb4u/MAHER_NEW_UI.git
-cd MAHER_NEW_UI
+git clone https://github.com/nileshb4u/MAHER-AI-V3.git
+cd MAHER-AI-V3
 
 # 2. Configure environment
-cp .env.example .env
-# Edit .env and add: GEMINI_API_KEY=your_key_here
+cp backend/.env.example backend/.env   # or create from scratch
+# Set at least one AI provider (see Environment Variables below)
 
 # 3. Install frontend
 npm install
-npm run build
 
 # 4. Setup backend
 cd backend
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
+pip install pyyaml          # required for skills/*.md loader
 python seed_db.py
 
-# 5. Start server
+# 5. Start servers
+# Terminal 1 – backend
 python run_production.py
+
+# Terminal 2 – frontend
+cd .. && npm run dev
 ```
 
 Open: **http://localhost:8080**
@@ -198,25 +204,26 @@ You should see:
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    Frontend (React + Vite)                   │
-│  Landing | Chat | Toolroom | Agent Management | Knowledge   │
+│  Landing | Chat | Toolroom | Agent Studio | Knowledge        │
 └───────────────────────────┬─────────────────────────────────┘
-                            │ REST API
+                            │ REST API  (port 8080)
 ┌───────────────────────────┴─────────────────────────────────┐
 │                    Backend (Flask + Python)                  │
 │  ┌────────────────────────────────────────────────────────┐ │
-│  │          Hybrid Orchestrator Engine                     │ │
-│  │  Task Decomposition → Resource Matching → Execution    │ │
+│  │               Skills Orchestrator                       │ │
+│  │  SkillRetriever → GPT-OSS function calling → answer    │ │
 │  └───┬────────────────┬────────────────┬──────────────────┘ │
 │      │                │                │                     │
-│  ┌───▼───┐       ┌────▼────┐      ┌───▼────┐              │
-│  │ Tools │       │Workflows│      │AI Agents│              │
-│  │ (4)   │       │  (3)    │      │  (10+)  │              │
-│  └───────┘       └─────────┘      └────┬────┘              │
-│                                         │                     │
-│  ┌──────────────────┐  ┌──────────────▼────────────┐      │
-│  │ SQLite Database  │  │ Gemini AI API (External)  │      │
-│  │ (Agent Storage)  │  │ (Natural Language)        │      │
-│  └──────────────────┘  └───────────────────────────┘      │
+│  ┌───▼───┐       ┌────▼────┐      ┌───▼─────────────────┐ │
+│  │ Tools │       │Workflows│      │  Skills (*.md files) │ │
+│  │ (4)   │       │  (3)    │      │  llm_agent / RAG     │ │
+│  └───────┘       └─────────┘      └──────────────────────┘ │
+│                                                               │
+│  ┌──────────────────┐  ┌──────────────────────────────────┐ │
+│  │ SQLite Database  │  │  AI Provider chain (fallback)    │ │
+│  │ (user agents,    │  │  GPT-OSS → MetaBrain → Gemini    │ │
+│  │  chat sessions)  │  │  (set MODEL_PROVIDER in .env)    │ │
+│  └──────────────────┘  └──────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -235,8 +242,12 @@ You should see:
 - SQLite (database)
 - Waitress 3.0 (WSGI server)
 
-**AI & Tools:**
-- Google Gemini AI (gemini-2.0-flash)
+**AI Providers (3-tier fallback):**
+- GPT-OSS / vLLM (self-hosted, primary)
+- MetaBrain (Saudi Aramco enterprise AI, secondary)
+- Google Gemini AI (last-resort fallback)
+
+**Document Parsing:**
 - PDFPlumber (PDF parsing)
 - Python-DOCX (Word parsing)
 
@@ -263,10 +274,27 @@ You should see:
 ### Configuration
 
 ```bash
-# .env
-GEMINI_API_KEY=your_secret_key_here
+# backend/.env
+
+# --- AI Provider (at least one required) ---
+MODEL_PROVIDER=gpt-oss          # primary: gpt-oss | metabrain | gemini
+
+# GPT-OSS / vLLM (self-hosted)
+VLLM_SERVER_URL=http://localhost:8000
+VLLM_MODEL_PATH=/home/cdsw/gpt-oss
+
+# MetaBrain (Aramco enterprise AI)
+METABRAIN_CLIENT_ID=your_client_id
+METABRAIN_CLIENT_SECRET=your_secret
+METABRAIN_BASE_URL=https://metabrain.aramco.com
+
+# Gemini (fallback)
+GEMINI_API_KEY=your_key_here
+
+# --- Server ---
 SECRET_KEY=your_flask_secret_key
 ALLOWED_ORIGINS=https://yourdomain.com
+ADMIN_PASSWORD=maher_admin_2026
 ```
 
 See [Security Checklist](SECURITY_CHECKLIST.md) for comprehensive security guidelines.
@@ -360,19 +388,27 @@ See [Sandbox Offline Deployment Guide](SANDBOX_OFFLINE_DEPLOYMENT_GUIDE.md) for 
 ## 📁 Project Structure
 
 ```
-MAHER_NEW_UI/
+MAHER-AI-V3/
 ├── components/              # React components
 │   ├── Chat.tsx            # Chat interface
 │   ├── Landing.tsx         # Landing page
-│   ├── Toolroom.tsx        # Agent marketplace
-│   ├── AgentManagement.tsx # Agent CRUD
+│   ├── Toolroom.tsx        # Skill marketplace
+│   ├── AgentStudio.tsx     # Custom skill builder
 │   └── icons/              # SVG icons
 ├── backend/                # Flask backend
 │   ├── app.py              # Main Flask app
-│   ├── models.py           # Database models
-│   ├── hybrid_orchestrator.py  # Orchestration engine
-│   ├── file_parser.py      # Document parsing
-│   ├── registry.json       # Resource registry
+│   ├── models.py           # Database models (users, sessions)
+│   ├── skill_retriever.py  # Semantic skill lookup
+│   ├── skills_orchestrator.py  # Skills orchestration engine
+│   ├── model_client.py     # 3-tier AI provider client
+│   ├── registry.json       # Tools & workflows registry
+│   ├── skills/             # *** Skill definitions (Markdown) ***
+│   │   ├── agent-1-schematic-analyst.md
+│   │   ├── agent-2-procedure-writer.md
+│   │   ├── agent-3-incident-report-analyzer.md
+│   │   ├── agent-4-contracts-assistant.md
+│   │   ├── agent-5-operations-copilot.md
+│   │   └── agent-6-project-planner.md
 │   ├── workflows/          # Workflow modules
 │   │   ├── maintenance_checklist.py
 │   │   ├── incident_analyzer.py
@@ -382,16 +418,14 @@ MAHER_NEW_UI/
 │   │   ├── safety_validator.py
 │   │   ├── cost_estimator.py
 │   │   └── document_search.py
-│   └── data/               # SQLite database
+│   └── data/               # SQLite database (auto-created)
 ├── public/                 # Static assets
-│   └── images/             # Images
 ├── dist/                   # Production build (generated)
-├── .env.example            # Environment template
 ├── package.json            # Node dependencies
 ├── vite.config.ts          # Vite configuration
-├── tsconfig.json           # TypeScript config
-├── setup.sh / setup.bat    # Setup scripts
-└── README.md              # This file
+├── setup.bat / setup.sh    # One-click setup scripts
+├── start.bat               # Windows one-click start
+└── README.md               # This file
 ```
 
 ---
@@ -453,13 +487,20 @@ async def my_function(param1: str) -> Dict[str, Any]:
 
 Same process as workflow. See [Hybrid Orchestrator Guide](backend/HYBRID_ORCHESTRATOR_README.md).
 
-### Create Custom Agent
+### Add a New Skill (file-based)
 
-1. Navigate to **Agent Management**
-2. Click **Create New Agent**
-3. Fill in details (name, description, system prompt)
-4. Save as draft or publish
-5. Upload knowledge documents (optional)
+1. Create `backend/skills/my-skill.md`
+2. Add YAML frontmatter with `id`, `name`, `description`, `category`, and `tool_schema`
+3. Write the system prompt as the Markdown body
+4. Restart the backend or call `POST /api/skills-orchestrator/reload`
+
+### Create a Custom Agent (UI-based)
+
+1. Navigate to **Agent Studio**
+2. Fill in the wizard (name, category, system prompt)
+3. Save as draft or publish
+4. Upload knowledge documents (optional)
+5. Published agents appear immediately in the Toolroom
 
 ---
 
@@ -519,20 +560,20 @@ netstat -an | find "8080"  # Windows
 PORT=8081 python run_production.py
 ```
 
-**2. API key error**
+**2. AI provider not responding**
 ```bash
-# Verify .env file
-cat .env | grep GEMINI_API_KEY
+# Check MODEL_PROVIDER in backend/.env
+# Valid values: gpt-oss | metabrain | gemini
 
-# Ensure no spaces around =
-# ✅ GEMINI_API_KEY=abc123
-# ❌ GEMINI_API_KEY = abc123
+# For GPT-OSS, verify the vLLM server is reachable
+curl $VLLM_SERVER_URL/health
+
+# Fallback: set MODEL_PROVIDER=gemini and add GEMINI_API_KEY
 ```
 
-**3. Rate limit exceeded**
+**3. Rate limit exceeded (Gemini fallback)**
 - Wait 1 minute and try again
-- Check Gemini API quotas
-- Upgrade API plan if needed
+- Switch primary provider to GPT-OSS or MetaBrain
 
 **4. Frontend blank/not loading**
 ```bash
@@ -638,7 +679,9 @@ Use GitHub Issues with:
 Built with:
 - [React](https://react.dev/) - UI framework
 - [Flask](https://flask.palletsprojects.com/) - Backend framework
-- [Google Gemini AI](https://ai.google.dev/) - AI model
+- GPT-OSS / vLLM — primary AI provider (self-hosted)
+- MetaBrain — Aramco enterprise AI provider
+- [Google Gemini AI](https://ai.google.dev/) — fallback AI provider
 - [Vite](https://vitejs.dev/) - Build tool
 - [Tailwind CSS](https://tailwindcss.com/) - Styling
 - [SQLAlchemy](https://www.sqlalchemy.org/) - Database ORM

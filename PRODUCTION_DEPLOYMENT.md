@@ -1,4 +1,4 @@
-# MAHER AI - Production Deployment Guide
+# MAHER AI v3 - Production Deployment Guide
 
 This guide explains how to deploy MAHER AI in production mode using Waitress WSGI server.
 
@@ -57,28 +57,55 @@ pip install -r backend/requirements.txt
 npm install
 ```
 
-### 2. Configure Environment Variables
-
-Create `backend/.env` file:
+### 2. Install PyYAML (required for skill files)
 
 ```bash
-# Required: Your Gemini API Key
-GEMINI_API_KEY=your_gemini_api_key_here
+pip install pyyaml
+```
 
-# Optional: Server Configuration
+### 3. Configure Environment Variables
+
+Create `backend/.env` file (set **at least one** AI provider):
+
+```bash
+# ============================================================
+# MAHER AI v3 - Environment Configuration
+# ============================================================
+
+# --- AI Provider chain: gpt-oss → metabrain → gemini ---
+# Set MODEL_PROVIDER to your primary provider.
+MODEL_PROVIDER=gpt-oss
+
+# GPT-OSS / vLLM (self-hosted, primary)
+VLLM_SERVER_URL=http://localhost:8000
+VLLM_MODEL_PATH=/home/cdsw/gpt-oss
+
+# MetaBrain (Aramco enterprise AI, secondary)
+METABRAIN_CLIENT_ID=
+METABRAIN_CLIENT_SECRET=
+METABRAIN_BASE_URL=
+
+# Gemini (Google AI, last resort fallback)
+GEMINI_API_KEY=
+
+# --- Server ---
 HOST=0.0.0.0
 PORT=8080
 THREADS=4
 
-# Optional: Security
+# --- Security ---
 SECRET_KEY=your_secret_key_here
 ALLOWED_ORIGINS=*
+ADMIN_PASSWORD=maher_admin_2026
 
-# Optional: HTTPS (if using reverse proxy)
+# --- Optional: HTTPS (if behind reverse proxy) ---
 USE_HTTPS=false
+
+# --- Optional: Redis for distributed rate limiting ---
+# REDIS_URL=redis://localhost:6379
 ```
 
-### 3. Build Frontend
+### 4. Build Frontend
 
 ```bash
 npm run build
@@ -94,13 +121,21 @@ This creates the `dist/` folder with optimized production assets.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `HOST` | `0.0.0.0` | Server bind address (0.0.0.0 = all interfaces) |
+| `MODEL_PROVIDER` | `gpt-oss` | Primary AI provider: `gpt-oss` \| `metabrain` \| `gemini` |
+| `VLLM_SERVER_URL` | *(empty)* | vLLM server base URL (GPT-OSS) |
+| `VLLM_MODEL_PATH` | `/home/cdsw/gpt-oss` | Model path on vLLM server |
+| `METABRAIN_CLIENT_ID` | *(empty)* | MetaBrain OAuth client ID |
+| `METABRAIN_CLIENT_SECRET` | *(empty)* | MetaBrain OAuth client secret |
+| `METABRAIN_BASE_URL` | *(empty)* | MetaBrain API base URL |
+| `GEMINI_API_KEY` | *(empty)* | Google Gemini API key (fallback) |
+| `HOST` | `0.0.0.0` | Server bind address |
 | `PORT` | `8080` | Server port |
 | `THREADS` | `4` | Number of worker threads |
-| `GEMINI_API_KEY` | *Required* | Your Google Gemini API key |
 | `SECRET_KEY` | *Auto-generated* | Flask session secret key |
 | `ALLOWED_ORIGINS` | `*` | CORS allowed origins (comma-separated) |
+| `ADMIN_PASSWORD` | `maher_admin_2026` | Admin dashboard password |
 | `USE_HTTPS` | `false` | Set to `true` if behind HTTPS reverse proxy |
+| `REDIS_URL` | *(empty)* | Redis URL for distributed rate limiting |
 
 ### Custom Configuration
 
@@ -177,8 +212,8 @@ serve(
 
 MAHER AI includes several production security features:
 
-### 1. API Key Protection
-- ✅ Gemini API key stored server-side only
+### 1. AI Provider Credential Protection
+- ✅ All provider credentials (GPT-OSS, MetaBrain, Gemini) stored server-side only
 - ✅ Never exposed to client/browser
 - ✅ All AI requests proxied through backend
 
@@ -301,13 +336,19 @@ source venv/bin/activate  # Linux/Mac
 pip install -r backend/requirements.txt
 ```
 
-### Issue: "GEMINI_API_KEY not found"
+### Issue: "No AI provider configured"
 
-**Problem:** Environment variable not set.
+**Problem:** No AI provider credentials are set in `backend/.env`.
 
-**Solution:** Create `backend/.env` file with:
-```
+**Solution:** Set at least one provider in `backend/.env`:
+```ini
+# Quick option — use Gemini for testing
+MODEL_PROVIDER=gemini
 GEMINI_API_KEY=your_key_here
+
+# Or use self-hosted GPT-OSS
+MODEL_PROVIDER=gpt-oss
+VLLM_SERVER_URL=http://your-vllm-host:8000
 ```
 
 ### Issue: Port already in use
@@ -493,6 +534,7 @@ tar -czf knowledge_backup_$(date +%Y%m%d).tar.gz backend/knowledge_storage/
 - **Flask Documentation**: https://flask.palletsprojects.com/
 - **Waitress Documentation**: https://docs.pylonsproject.org/projects/waitress/
 - **Gemini API**: https://ai.google.dev/docs
+- **vLLM (GPT-OSS)**: https://docs.vllm.ai/
 - **MAHER AI Repository**: [Your Git Repository URL]
 
 ---
@@ -507,5 +549,5 @@ For issues and questions:
 
 ---
 
-**Last Updated:** 2025-11-12
-**Version:** 1.0.0
+**Last Updated:** 2026-03-20
+**Version:** 3.0.0

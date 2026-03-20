@@ -1,72 +1,23 @@
-# MAHER AI - Startup Scripts
+# MAHER AI v3 - Startup Scripts
 
-## Quick Start
+## Quick Start (Windows)
 
-### Start the Application
-```bash
+```cmd
 start.bat
 ```
-This will:
-1. Check all dependencies
-2. Start the backend Flask server (port 5000)
-3. Start the frontend Vite dev server (port 5173)
-4. Open your browser to http://localhost:5173
 
-### Restart the Application
-```bash
-restart.bat
+This single script:
+1. Checks the Python virtual environment (`backend\venv`)
+2. Installs frontend `node_modules` if missing
+3. Creates `backend\.env` from template if missing (then pauses for you to fill it in)
+4. Starts the **backend** Flask/Waitress server in a new window (port 8080)
+5. Starts the **frontend** Vite dev server in a new window (port 3000)
+6. Opens your browser to `http://localhost:3000`
+
+```cmd
+restart.bat   # kill existing processes and re-run start.bat
+stop.bat      # gracefully stop both servers
 ```
-Stops any running instances and restarts the application.
-
-### Stop the Application
-```bash
-stop.bat
-```
-Stops all running MAHER AI servers.
-
----
-
-## Script Details
-
-### `start.bat`
-**Purpose**: Complete application startup with dependency checks
-
-**What it does**:
-- ✅ Verifies backend virtual environment exists
-- ✅ Checks/installs frontend node modules
-- ✅ Verifies .env files exist
-- ✅ Starts backend server in new window
-- ✅ Starts frontend dev server in new window
-- ✅ Opens browser automatically
-
-**Requirements**:
-- Backend virtual environment must be set up (run `setup.bat` first)
-- Node.js must be installed
-
-### `restart.bat`
-**Purpose**: Quick restart without dependency checks
-
-**What it does**:
-- Kills existing backend/frontend processes
-- Calls `start.bat` to restart
-
-**Use when**:
-- Making code changes
-- Servers are unresponsive
-- Need a fresh start
-
-### `stop.bat`
-**Purpose**: Gracefully stop all servers
-
-**What it does**:
-- Stops backend Flask server
-- Stops frontend Vite dev server
-- Shows confirmation messages
-
-**Use when**:
-- Done working
-- Need to free up ports
-- Switching projects
 
 ---
 
@@ -74,103 +25,177 @@ Stops all running MAHER AI servers.
 
 | Service | URL | Description |
 |---------|-----|-------------|
-| Frontend | http://localhost:5173 | Main application UI |
-| Backend API | http://localhost:5000 | Flask REST API |
-| Health Check | http://localhost:5000/api/health | API status |
+| Frontend (Vite dev) | http://localhost:3000 | Main application UI |
+| Backend API (Waitress) | http://localhost:8080 | Flask REST API |
+| Health check | http://localhost:8080/api/health | API status |
 
 ---
 
-## Admin Credentials
+## First-Time Setup
 
-**Password**: `maher_admin_2026`
+```cmd
+REM 1. Run setup (creates venv, installs packages, creates .env template)
+setup.bat
 
-Change this in production by setting `ADMIN_PASSWORD` in `backend/.env`
+REM 2. Configure at least one AI provider
+notepad backend\.env
+
+REM 3. Start the application
+start.bat
+```
+
+---
+
+## `backend\.env` — Required Configuration
+
+`setup.bat` and `start.bat` both generate a template automatically if no `.env` exists. Fill in at least one AI provider block:
+
+```ini
+# ============================================================
+# MAHER AI v3 - Environment Configuration
+# ============================================================
+
+# --- AI Provider (fallback chain: gpt-oss → metabrain → gemini) ---
+MODEL_PROVIDER=gpt-oss
+
+# GPT-OSS / vLLM (self-hosted, primary)
+VLLM_SERVER_URL=
+VLLM_MODEL_PATH=/home/cdsw/gpt-oss
+
+# MetaBrain (Aramco enterprise AI, secondary)
+METABRAIN_CLIENT_ID=
+METABRAIN_CLIENT_SECRET=
+METABRAIN_BASE_URL=
+
+# Gemini (Google AI, last resort)
+GEMINI_API_KEY=
+
+# --- Server ---
+HOST=0.0.0.0
+PORT=8080
+THREADS=4
+
+# --- Security ---
+SECRET_KEY=
+ALLOWED_ORIGINS=*
+ADMIN_PASSWORD=maher_admin_2026
+```
+
+> Change `ADMIN_PASSWORD` before deploying to a shared environment.
+
+---
+
+## Script Details
+
+### `start.bat`
+
+| Step | What happens |
+|------|-------------|
+| 1 | Checks `backend\venv` exists (exits with error if not) |
+| 2 | Runs `npm install` if `node_modules` is missing |
+| 3 | Creates `backend\.env` from template and opens Notepad if missing |
+| 4 | Opens a new terminal running `python app.py` on port 8080 |
+| 5 | Opens a new terminal running `npm run dev` on port 3000 |
+| 6 | Opens `http://localhost:3000` in the default browser |
+
+### `restart.bat`
+
+Kills any processes on ports 8080 and 3000 then calls `start.bat`.
+
+### `stop.bat`
+
+Kills processes on ports 8080 and 3000 gracefully.
 
 ---
 
 ## Troubleshooting
 
 ### "Virtual environment not found"
-**Solution**: Run `setup.bat` first to create the virtual environment and install dependencies.
+
+Run `setup.bat` first to create `backend\venv` and install all Python packages.
 
 ### "Port already in use"
-**Solution**: 
-1. Run `stop.bat` to kill existing processes
-2. Or manually kill processes using ports 5000 and 5173
 
-### "Module not found" errors
-**Backend**: 
-```bash
+```cmd
+stop.bat
+REM or manually:
+netstat -ano | find "8080"
+taskkill /PID <pid> /F
+```
+
+### "Module not found" (Python)
+
+```cmd
 cd backend
 venv\Scripts\activate
 pip install -r requirements.txt
+pip install pyyaml   REM required for skills/*.md loader
 ```
 
-**Frontend**:
-```bash
+### "Module not found" (Node)
+
+```cmd
 npm install
 ```
 
-### Servers won't start
-1. Check `backend/.env` has required API keys
-2. Verify Python 3.10+ is installed
-3. Verify Node.js 18+ is installed
-4. Check firewall isn't blocking ports 5000/5173
+### Backend starts but no AI responses
+
+Check `backend\.env` — at least one AI provider must be configured:
+- `MODEL_PROVIDER=gpt-oss` and `VLLM_SERVER_URL` pointing to a running vLLM server, **or**
+- `MODEL_PROVIDER=metabrain` and MetaBrain credentials, **or**
+- `MODEL_PROVIDER=gemini` and a valid `GEMINI_API_KEY`
+
+### Skills not loading
+
+```cmd
+cd backend
+venv\Scripts\activate
+pip install pyyaml
+python -c "from skill_retriever import SkillRetriever; r=SkillRetriever('registry.json'); print(len(r._schemas), 'skills loaded')"
+```
 
 ---
 
 ## Development Workflow
 
-### First Time Setup
-```bash
-# 1. Install dependencies
-setup.bat
-
-# 2. Configure environment
-# Edit backend/.env with your API keys
-
-# 3. Start application
-start.bat
-```
-
 ### Daily Development
-```bash
-# Start working
-start.bat
 
-# Make code changes...
-# Servers auto-reload on file changes
-
-# When done
-stop.bat
+```cmd
+start.bat          REM start servers
+REM ... make changes — Vite and Flask auto-reload on save ...
+stop.bat           REM stop when done
 ```
 
 ### After Pulling Updates
-```bash
-# Update dependencies
+
+```cmd
 cd backend
 venv\Scripts\activate
 pip install -r requirements.txt
 cd ..
 npm install
-
-# Restart application
 restart.bat
+```
+
+### After Editing a Skill File (`backend/skills/*.md`)
+
+The skill registry is reloaded at startup. For a live reload without restarting:
+
+```cmd
+curl -X POST http://localhost:8080/api/skills-orchestrator/reload
 ```
 
 ---
 
 ## Production Deployment
 
-For production, use the production scripts instead:
+For production, build the frontend first then run Waitress directly:
 
-```bash
-# Build frontend
+```cmd
 npm run build
-
-# Start production server
 cd backend
+venv\Scripts\activate
 python run_production.py
 ```
 
-See `DEPLOYMENT.md` for full production setup instructions.
+See [PRODUCTION_DEPLOYMENT.md](PRODUCTION_DEPLOYMENT.md) for full instructions.
