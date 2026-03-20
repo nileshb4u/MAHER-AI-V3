@@ -1,0 +1,36 @@
+MANUAL STARTUP GUIDE (Newbie Friendly)
+======================================
+
+If the "run.bat" file does not work for you, follow these 3 simple steps to start the application manually.
+
+STEP 1: Open the "Black Box" (Command Prompt)
+---------------------------------------------
+1. Press the `Windows Key` on your keyboard.
+2. Type `cmd` and press **Enter**.
+   (A black window should appear).
+
+STEP 2: Go to the Folder
+------------------------
+1. Type `cd` followed by a space in the black window. Do NOT press Enter yet.
+   It should look like this: `cd `
+2. **Open your folder** where you extracted the files in File Explorer.
+3. **Copy the address** from the top bar of File Explorer.
+4. **Paste** it into the black window after the `cd `.
+   It should look like: `cd C:\Apps\MAHER_AI_Package`
+5. Press **Enter**.
+
+STEP 3: Run the "Magic Command"
+-------------------------------
+Copy the line below, paste it into the black window, and press **Enter**:
+
+set PYTHONPATH=.\site-packages;.\app\backend && .\runtime\python.exe .\app\backend\wsgi.py
+
+---
+WHAT SHOULD HAPPEN:
+- You will see lines of text appearing.
+- The last line should say: `Serving on http://0.0.0.0:8080`
+- **Do not close this black window.**
+
+FINAL STEP:
+- Open Chrome or Edge.
+- Go to: http://localhost:8080

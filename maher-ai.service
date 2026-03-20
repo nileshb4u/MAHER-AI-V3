@@ -1,0 +1,30 @@
+[Unit]
+Description=MAHER AI - Virtual Maintenance Assistant
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/path/to/MAHER_NEW_UI
+Environment="PATH=/path/to/MAHER_NEW_UI/venv/bin"
+EnvironmentFile=/path/to/MAHER_NEW_UI/.env
+
+# Start the Waitress WSGI server
+ExecStart=/path/to/MAHER_NEW_UI/venv/bin/python /path/to/MAHER_NEW_UI/backend/wsgi.py
+
+# Restart policy
+Restart=always
+RestartSec=3
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=maher-ai
+
+[Install]
+WantedBy=multi-user.target
