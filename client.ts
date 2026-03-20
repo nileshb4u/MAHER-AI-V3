@@ -60,6 +60,11 @@ interface AgentData {
   updatedAt?: string;
   networkId?: string;
   department?: string;
+  // Skill fields
+  toolSchema?: object | null;
+  implementationType?: string;
+  skillVersion?: string;
+  isSkill?: boolean;
 }
 
 interface CreateAgentRequest {
@@ -74,6 +79,10 @@ interface CreateAgentRequest {
   status?: 'draft' | 'published';
   networkId?: string;
   department?: string;
+  // Skill fields
+  toolSchema?: object | null;
+  implementationType?: string;
+  skillVersion?: string;
 }
 
 interface UpdateAgentRequest {
@@ -87,6 +96,38 @@ interface UpdateAgentRequest {
   displayProviderName?: string;
   networkId?: string;
   department?: string;
+  // Skill fields
+  toolSchema?: object | null;
+  implementationType?: string;
+  skillVersion?: string;
+}
+
+interface SkillSchemaRequest {
+  name: string;
+  category: string;
+  taskDefinition: string;
+  requiredExpertise?: string;
+  decisionAuthority?: string;
+}
+
+interface SkillSchemaResponse {
+  success: boolean;
+  tool_schema?: object;
+  error?: string;
+}
+
+interface SkillsOrchestratorRequest {
+  input: string;
+  history?: Array<{ role: string; content: string }>;
+  system_prompt?: string;
+}
+
+interface SkillsOrchestratorResponse {
+  success: boolean;
+  response: string;
+  skills_used: string[];
+  provider: string;
+  elapsed_sec: number;
 }
 
 interface KnowledgeUploadResponse {
@@ -717,6 +758,86 @@ class APIClient {
       // Still clear local storage
       localStorage.removeItem('maher_session_id');
       localStorage.removeItem('maher_user_role');
+      throw error;
+    }
+  }
+
+  // ============================================================================
+  // Skills Methods
+  // ============================================================================
+
+  /**
+   * Generate an OpenAI function-calling tool_schema from agent wizard data.
+   * Called by AI Studio's "Generate Skill Schema" button.
+   */
+  async generateSkillSchema(request: SkillSchemaRequest): Promise<SkillSchemaResponse> {
+    try {
+      const response = await fetch(`${this.baseUrl}/skills/generate-schema`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Generate Skill Schema Error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all published agents that have a tool_schema (i.e. are registered skills).
+   */
+  async getSkillAgents(): Promise<{ success: boolean; skills: AgentData[]; count: number }> {
+    try {
+      const response = await fetch(`${this.baseUrl}/skills/agents`);
+      return await response.json();
+    } catch (error) {
+      console.error('Get Skill Agents Error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Process a request through the Skills Orchestrator (GPT-OSS native function calling).
+   * Falls back to hybrid orchestrator response shape for backward compatibility.
+   */
+  async processWithSkillsOrchestrator(
+    request: SkillsOrchestratorRequest
+  ): Promise<SkillsOrchestratorResponse> {
+    try {
+      const response = await fetch(`${this.baseUrl}/skills-orchestrator/process`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(err.error || `HTTP ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      console.error('Skills Orchestrator Error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Hot-reload the skills registry (admin only).
+   * Call after publishing a new skill from AI Studio.
+   */
+  async reloadSkills(): Promise<{ success: boolean; skills_count: number }> {
+    try {
+      const sessionId = this.getSessionId();
+      const response = await fetch(`${this.baseUrl}/skills-orchestrator/reload`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Session-ID': sessionId || '',
+        },
+      });
+      return await response.json();
+    } catch (error) {
+      console.error('Reload Skills Error:', error);
       throw error;
     }
   }

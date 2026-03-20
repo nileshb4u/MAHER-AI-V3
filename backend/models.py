@@ -8,6 +8,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime, timedelta
 import enum
+import json
 import os
 
 Base = declarative_base()
@@ -61,6 +62,21 @@ class Agent(Base):
     network_id = Column(String(50), nullable=True)
     department = Column(String(100), nullable=True)
 
+    # ── Skills fields ──────────────────────────────────────────────────────────
+    # JSON string: OpenAI function-calling schema  {"type":"function","function":{...}}
+    # When present, this agent is a first-class "skill" callable by the OSS model.
+    tool_schema = Column(Text, nullable=True)
+
+    # How the skill is implemented
+    # llm_agent         → backed by system_prompt + model call  (default)
+    # rag_pipeline      → backed by a vector store + model call
+    # workflow          → backed by a workflow module
+    # local_function    → backed by a Python function in tools/
+    implementation_type = Column(String(50), default='llm_agent', nullable=False)
+
+    # Semantic version of the skill interface (bumped when tool_schema changes)
+    skill_version = Column(String(20), default='1.0.0', nullable=False)
+
     def to_dict(self):
         """Convert agent to dictionary for API responses"""
         return {
@@ -84,6 +100,11 @@ class Agent(Base):
             'updatedAt': self.updated_at.isoformat() if self.updated_at else None,
             'networkId': self.network_id,
             'department': self.department,
+            # Skill fields
+            'toolSchema': json.loads(self.tool_schema) if self.tool_schema else None,
+            'implementationType': self.implementation_type or 'llm_agent',
+            'skillVersion': self.skill_version or '1.0.0',
+            'isSkill': bool(self.tool_schema),
         }
 
     def _get_default_icon(self):
@@ -186,8 +207,24 @@ engine = create_engine(DATABASE_URL, echo=False)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():
-    """Initialize database and create tables"""
+    """Initialize database, create tables, and apply column migrations."""
     Base.metadata.create_all(bind=engine)
+
+    # SQLite does not support ALTER TABLE IF NOT EXISTS — wrap each in try/except
+    migrations = [
+        "ALTER TABLE agents ADD COLUMN tool_schema TEXT",
+        "ALTER TABLE agents ADD COLUMN implementation_type VARCHAR(50) DEFAULT 'llm_agent'",
+        "ALTER TABLE agents ADD COLUMN skill_version VARCHAR(20) DEFAULT '1.0.0'",
+    ]
+    with engine.connect() as conn:
+        for ddl in migrations:
+            try:
+                conn.execute(__import__('sqlalchemy').text(ddl))
+                conn.commit()
+            except Exception:
+                # Column already exists — safe to ignore
+                pass
+
     print(f"Database initialized at: {DATABASE_PATH}")
 
 def get_db():
