@@ -1,142 +1,162 @@
 @echo off
 REM ============================================================================
-REM MAHER AI - Complete Application Startup Script
+REM MAHER AI v3 - One-Click Application Startup
 REM ============================================================================
-REM This script starts both the backend Flask server and frontend Vite dev server
+REM Starts both backend (Flask/Waitress) and frontend (Vite dev server)
+REM Opens the browser automatically when both servers are ready.
+REM
+REM Usage:
+REM   Double-click this file  OR  run from command prompt: start.bat
+REM
+REM Prerequisites (run setup.bat first if not done):
+REM   - Python 3.10+ with venv in backend\venv
+REM   - Node.js 18+ with node_modules present
+REM   - backend\.env configured with at least one AI provider key
 REM ============================================================================
 
+setlocal enabledelayedexpansion
+
 echo.
-echo ========================================
-echo   MAHER AI - Application Startup
-echo ========================================
+echo ============================================================
+echo   MAHER AI v3 - Virtual Maintenance Assistant
+echo   Developed by Saudi Aramco Corporate Maintenance Services
+echo ============================================================
 echo.
 
-REM Check if we're in the correct directory
+REM ------------------------------------------------------------
+REM Guard: must be run from the MAHER-AI-V3 root directory
+REM ------------------------------------------------------------
 if not exist "backend\app.py" (
-    echo ERROR: backend\app.py not found!
-    echo Please run this script from the MAHER_NEW_UI root directory.
+    echo [ERROR] backend\app.py not found.
+    echo         Run this script from the MAHER-AI-V3 root folder.
     pause
     exit /b 1
 )
-
 if not exist "package.json" (
-    echo ERROR: package.json not found!
-    echo Please run this script from the MAHER_NEW_UI root directory.
+    echo [ERROR] package.json not found.
+    echo         Run this script from the MAHER-AI-V3 root folder.
     pause
     exit /b 1
 )
 
-REM ============================================================================
-REM Step 1: Check Backend Dependencies
-REM ============================================================================
-echo [1/5] Checking backend dependencies...
-echo.
-
-if not exist "backend\venv" (
-    echo WARNING: Virtual environment not found!
-    echo Please run setup.bat first to install dependencies.
+REM ------------------------------------------------------------
+REM Step 1: Backend virtual environment
+REM ------------------------------------------------------------
+echo [1/5] Checking Python virtual environment...
+if not exist "backend\venv\" (
+    echo [ERROR] Virtual environment not found at backend\venv
+    echo         Please run setup.bat first.
     pause
     exit /b 1
 )
+echo        OK - backend\venv found
 
-REM ============================================================================
-REM Step 2: Check Frontend Dependencies
-REM ============================================================================
+REM ------------------------------------------------------------
+REM Step 2: Frontend node_modules
+REM ------------------------------------------------------------
 echo [2/5] Checking frontend dependencies...
-echo.
-
-if not exist "node_modules" (
-    echo WARNING: Node modules not found!
-    echo Installing frontend dependencies...
+if not exist "node_modules\" (
+    echo        node_modules not found - installing now...
     call npm install
     if errorlevel 1 (
-        echo ERROR: Failed to install frontend dependencies!
+        echo [ERROR] npm install failed. Check your Node.js installation.
         pause
         exit /b 1
     )
 )
+echo        OK - node_modules found
 
-REM ============================================================================
-REM Step 3: Check Environment Variables
-REM ============================================================================
+REM ------------------------------------------------------------
+REM Step 3: Environment file
+REM ------------------------------------------------------------
 echo [3/5] Checking environment configuration...
-echo.
-
 if not exist "backend\.env" (
-    echo WARNING: Backend .env file not found!
-    echo Creating from .env.example...
-    if exist "backend\.env.example" (
-        copy "backend\.env.example" "backend\.env"
-        echo Please configure backend\.env with your API keys.
-    ) else (
-        echo ERROR: backend\.env.example not found!
-        pause
-        exit /b 1
-    )
+    echo [WARNING] backend\.env not found - creating from template...
+    (
+        echo # ============================================================
+        echo # MAHER AI v3 - Environment Configuration
+        echo # ============================================================
+        echo.
+        echo # --- AI Provider (choose one or more; fallback order: gpt-oss -^> metabrain -^> gemini) ---
+        echo MODEL_PROVIDER=gpt-oss
+        echo.
+        echo # GPT-OSS / vLLM (self-hosted, primary)
+        echo VLLM_SERVER_URL=
+        echo VLLM_MODEL_PATH=/home/cdsw/gpt-oss
+        echo.
+        echo # MetaBrain (Aramco enterprise AI, secondary)
+        echo METABRAIN_CLIENT_ID=
+        echo METABRAIN_CLIENT_SECRET=
+        echo METABRAIN_BASE_URL=
+        echo.
+        echo # Gemini (Google AI, last resort)
+        echo GEMINI_API_KEY=
+        echo.
+        echo # --- Server ---
+        echo HOST=0.0.0.0
+        echo PORT=8080
+        echo THREADS=4
+        echo.
+        echo # --- Security ---
+        echo SECRET_KEY=
+        echo ALLOWED_ORIGINS=*
+        echo ADMIN_PASSWORD=maher_admin_2026
+        echo.
+        echo # --- Optional: Redis for distributed rate limiting ---
+        echo REDIS_URL=
+    ) > backend\.env
+    echo [WARNING] Created backend\.env template.
+    echo           Configure at least one AI provider key before continuing.
+    echo.
+    echo  Press any key to open backend\.env for editing, then re-run start.bat.
+    pause
+    start notepad backend\.env
+    exit /b 0
 )
+echo        OK - backend\.env found
 
-if not exist ".env" (
-    echo WARNING: Frontend .env file not found!
-    if exist ".env.example" (
-        copy ".env.example" ".env"
-        echo Created .env from .env.example
-    )
-)
+REM ------------------------------------------------------------
+REM Step 4: Start backend server
+REM ------------------------------------------------------------
+echo [4/5] Starting backend server (Flask on port 8080)...
+start "MAHER AI - Backend" cmd /k "cd /d "%~dp0backend" && call venv\Scripts\activate.bat && echo. && echo [MAHER AI Backend] Starting on http://localhost:8080 && echo. && python app.py"
 
-REM ============================================================================
-REM Step 4: Start Backend Server
-REM ============================================================================
-echo [4/5] Starting backend server...
+echo        Waiting for backend to initialise (8 seconds)...
+timeout /t 8 /nobreak >nul
+
+REM ------------------------------------------------------------
+REM Step 5: Start frontend dev server
+REM ------------------------------------------------------------
+echo [5/5] Starting frontend dev server (Vite on port 3000)...
+start "MAHER AI - Frontend" cmd /k "cd /d "%~dp0" && echo. && echo [MAHER AI Frontend] Starting on http://localhost:3000 && echo. && npm run dev"
+
+echo        Waiting for frontend to initialise (6 seconds)...
+timeout /t 6 /nobreak >nul
+
+REM ------------------------------------------------------------
+REM Done
+REM ------------------------------------------------------------
 echo.
-
-REM Start backend in a new window with virtual environment activated
-start "MAHER AI - Backend Server" cmd /k "cd /d "%~dp0backend" && call venv\Scripts\activate.bat && set PORT=8080 && python app.py"
-
-REM Wait for backend to start
-echo Waiting for backend to initialize...
-timeout /t 5 /nobreak >nul
-
-REM ============================================================================
-REM Step 5: Start Frontend Dev Server
-REM ============================================================================
-echo [5/5] Starting frontend dev server...
+echo ============================================================
+echo   MAHER AI v3 - Both servers are starting up!
+echo ============================================================
 echo.
-
-REM Start frontend in a new window
-# Use 'npm run dev -- --host' to ensure it binds to network if needed, though vite config handles it
-start "MAHER AI - Frontend Dev Server" cmd /k "cd /d "%~dp0" && npm run dev"
-
-REM Wait for frontend to start
-echo Waiting for frontend to initialize...
-timeout /t 5 /nobreak >nul
-
-REM ============================================================================
-REM Startup Complete
-REM ============================================================================
+echo   Backend  (Flask)  -^>  http://localhost:8080
+echo   Frontend (Vite)   -^>  http://localhost:3000
 echo.
-echo ========================================
-echo   MAHER AI - Startup Complete!
-echo ========================================
+echo   Admin Password    -^>  maher_admin_2026
+echo                         (set ADMIN_PASSWORD in backend\.env to change)
 echo.
-echo Backend Server:  http://localhost:8080
-echo Frontend App:    http://localhost:3000
+echo   AI Provider chain -^>  GPT-OSS -^> MetaBrain -^> Gemini
+echo                         (set MODEL_PROVIDER in backend\.env to change)
 echo.
-echo Admin Password:  maher_admin_2026
+echo   Two terminal windows have been opened.
+echo   Press Ctrl+C in each to stop the servers.
 echo.
-echo Two windows have been opened:
-echo   1. Backend Server (Flask) - Port 8080
-echo   2. Frontend Dev Server (Vite) - Port 3000
-echo.
-echo Press Ctrl+C in each window to stop the servers.
-echo.
-echo Opening browser in 3 seconds...
-timeout /t 3 /nobreak >nul
-
-REM Open browser
+echo   Opening browser to http://localhost:3000 ...
+timeout /t 2 /nobreak >nul
 start http://localhost:3000
-
 echo.
-echo You can close this window now.
-echo The servers will continue running in their own windows.
+echo   You can close this window now.
 echo.
 pause
