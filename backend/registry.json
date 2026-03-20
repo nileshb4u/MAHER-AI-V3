@@ -1,0 +1,735 @@
+{
+  "version": "1.1.0",
+  "last_updated": "2025-11-15",
+  "resources": {
+    "ai_agents": [
+      {
+        "id": "dynamic",
+        "name": "AI Agents from Database",
+        "description": "Dynamically loaded from database - all published agents",
+        "capabilities": ["natural_language_processing", "decision_making", "analysis", "recommendations"],
+        "source": "database",
+        "priority": 3
+      }
+    ],
+    "workflows": [
+      {
+        "id": "workflow_maintenance_checklist",
+        "name": "Maintenance Checklist Generator",
+        "description": "Generates comprehensive maintenance checklists based on equipment type and maintenance level",
+        "capabilities": ["maintenance_planning", "checklist_generation", "equipment_procedures"],
+        "module_path": "workflows.maintenance_checklist",
+        "function": "generate_checklist",
+        "parameters": {
+          "equipment_type": "string",
+          "maintenance_level": "string (routine|preventive|corrective)"
+        },
+        "execution_type": "async",
+        "timeout": 30,
+        "priority": 2,
+        "dependencies": []
+      },
+      {
+        "id": "workflow_incident_analyzer",
+        "name": "Incident Report Analyzer",
+        "description": "Analyzes incident reports and extracts key information, root causes, and recommendations",
+        "capabilities": ["incident_analysis", "root_cause_analysis", "safety_recommendations"],
+        "module_path": "workflows.incident_analyzer",
+        "function": "analyze_incident",
+        "parameters": {
+          "incident_data": "dict"
+        },
+        "execution_type": "async",
+        "timeout": 45,
+        "priority": 2,
+        "dependencies": []
+      },
+      {
+        "id": "workflow_equipment_scheduler",
+        "name": "Equipment Maintenance Scheduler",
+        "description": "Creates maintenance schedules based on equipment criticality and operational requirements",
+        "capabilities": ["scheduling", "maintenance_planning", "resource_optimization"],
+        "module_path": "workflows.equipment_scheduler",
+        "function": "create_schedule",
+        "parameters": {
+          "equipment_list": "list",
+          "time_horizon_days": "int"
+        },
+        "execution_type": "async",
+        "timeout": 60,
+        "priority": 2,
+        "dependencies": []
+      }
+    ],
+    "tools": [
+      {
+        "id": "tool_parts_inventory",
+        "name": "Parts Inventory Checker",
+        "description": "Checks parts inventory availability and provides stock levels",
+        "capabilities": ["inventory_check", "parts_availability", "stock_management"],
+        "type": "rest_api",
+        "endpoint": "/tools/inventory/check",
+        "method": "POST",
+        "parameters": {
+          "part_numbers": "list"
+        },
+        "timeout": 10,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_equipment_lookup",
+        "name": "Equipment Database Lookup",
+        "description": "Retrieves equipment specifications, manuals, and technical data",
+        "capabilities": ["equipment_lookup", "specifications", "technical_data"],
+        "type": "local_function",
+        "module_path": "tools.equipment_lookup",
+        "function": "lookup_equipment",
+        "parameters": {
+          "equipment_id": "string",
+          "include_manuals": "boolean"
+        },
+        "timeout": 5,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_safety_validator",
+        "name": "Safety Procedure Validator",
+        "description": "Validates maintenance procedures against safety standards and regulations",
+        "capabilities": ["safety_validation", "compliance_check", "risk_assessment"],
+        "type": "local_function",
+        "module_path": "tools.safety_validator",
+        "function": "validate_procedure",
+        "parameters": {
+          "procedure_text": "string",
+          "equipment_type": "string"
+        },
+        "timeout": 15,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_cost_estimator",
+        "name": "Maintenance Cost Estimator",
+        "description": "Estimates maintenance costs including labor, parts, and downtime",
+        "capabilities": ["cost_estimation", "budget_planning", "financial_analysis"],
+        "type": "local_function",
+        "module_path": "tools.cost_estimator",
+        "function": "estimate_cost",
+        "parameters": {
+          "maintenance_type": "string",
+          "equipment_id": "string",
+          "duration_hours": "float"
+        },
+        "timeout": 10,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_document_search",
+        "name": "Technical Document Search",
+        "description": "Searches technical documentation, manuals, and procedures",
+        "capabilities": ["document_search", "knowledge_retrieval", "manual_lookup"],
+        "type": "local_function",
+        "module_path": "tools.document_search",
+        "function": "search_documents",
+        "parameters": {
+          "query": "string",
+          "doc_types": "list"
+        },
+        "timeout": 20,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_pdf_merge",
+        "name": "PDF Merge Tool",
+        "description": "Merges multiple PDF files into a single document",
+        "capabilities": ["pdf_processing", "document_merge", "file_management"],
+        "type": "local_function",
+        "module_path": "tools.pdf_utilities",
+        "function": "merge_pdfs",
+        "parameters": {
+          "input_files": "list",
+          "output_file": "string"
+        },
+        "timeout": 30,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_pdf_split",
+        "name": "PDF Split Tool",
+        "description": "Splits PDF into multiple files by pages or ranges",
+        "capabilities": ["pdf_processing", "document_split", "file_management"],
+        "type": "local_function",
+        "module_path": "tools.pdf_utilities",
+        "function": "split_pdf",
+        "parameters": {
+          "input_file": "string",
+          "output_dir": "string",
+          "split_type": "string",
+          "split_value": "int"
+        },
+        "timeout": 30,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_pdf_extract_text",
+        "name": "PDF Text Extractor",
+        "description": "Extracts text from PDF documents with optional OCR for scanned documents",
+        "capabilities": ["pdf_processing", "text_extraction", "ocr", "content_analysis"],
+        "type": "local_function",
+        "module_path": "tools.pdf_utilities",
+        "function": "extract_text_from_pdf",
+        "parameters": {
+          "input_file": "string",
+          "page_numbers": "list",
+          "use_ocr": "boolean"
+        },
+        "timeout": 60,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_pdf_extract_tables",
+        "name": "PDF Table Extractor",
+        "description": "Extracts tables from PDF documents",
+        "capabilities": ["pdf_processing", "table_extraction", "data_extraction"],
+        "type": "local_function",
+        "module_path": "tools.pdf_utilities",
+        "function": "extract_tables_from_pdf",
+        "parameters": {
+          "input_file": "string",
+          "page_numbers": "list"
+        },
+        "timeout": 45,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_pdf_convert",
+        "name": "Convert to PDF",
+        "description": "Converts images, Word documents, and text files to PDF format",
+        "capabilities": ["pdf_processing", "format_conversion", "document_creation"],
+        "type": "local_function",
+        "module_path": "tools.pdf_utilities",
+        "function": "convert_to_pdf",
+        "parameters": {
+          "input_file": "string",
+          "output_file": "string",
+          "source_type": "string"
+        },
+        "timeout": 30,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_pdf_to_word",
+        "name": "PDF to Word Converter",
+        "description": "Converts PDF documents to Word format",
+        "capabilities": ["pdf_processing", "format_conversion", "document_conversion"],
+        "type": "local_function",
+        "module_path": "tools.pdf_utilities",
+        "function": "pdf_to_word",
+        "parameters": {
+          "input_file": "string",
+          "output_file": "string"
+        },
+        "timeout": 45,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_pdf_info",
+        "name": "PDF Information",
+        "description": "Retrieves metadata and information about PDF files",
+        "capabilities": ["pdf_processing", "metadata_extraction", "document_analysis"],
+        "type": "local_function",
+        "module_path": "tools.pdf_utilities",
+        "function": "get_pdf_info",
+        "parameters": {
+          "input_file": "string"
+        },
+        "timeout": 10,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_ocr_local",
+        "name": "Local Offline OCR",
+        "description": "Performs OCR on images using local offline models (EasyOCR) - no internet required",
+        "capabilities": ["ocr", "image_processing", "text_extraction", "offline_processing"],
+        "type": "local_function",
+        "module_path": "tools.ocr_effocr",
+        "function": "ocr_image_local",
+        "parameters": {
+          "image_path": "string",
+          "engine": "string",
+          "languages": "list"
+        },
+        "timeout": 120,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_ocr_pdf_local",
+        "name": "Local PDF OCR",
+        "description": "Performs OCR on PDF documents using local offline models",
+        "capabilities": ["ocr", "pdf_processing", "text_extraction", "offline_processing"],
+        "type": "local_function",
+        "module_path": "tools.ocr_effocr",
+        "function": "ocr_pdf_local",
+        "parameters": {
+          "pdf_path": "string",
+          "output_format": "string",
+          "engine": "string",
+          "languages": "list"
+        },
+        "timeout": 300,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_word_create",
+        "name": "Word Document Creator",
+        "description": "Creates Word documents with formatted content, tables, and headings",
+        "capabilities": ["word_processing", "document_creation", "content_formatting"],
+        "type": "local_function",
+        "module_path": "tools.word_utilities",
+        "function": "create_word_document",
+        "parameters": {
+          "output_file": "string",
+          "title": "string",
+          "content": "list"
+        },
+        "timeout": 20,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_word_extract_text",
+        "name": "Word Text Extractor",
+        "description": "Extracts text and metadata from Word documents",
+        "capabilities": ["word_processing", "text_extraction", "content_analysis"],
+        "type": "local_function",
+        "module_path": "tools.word_utilities",
+        "function": "extract_text_from_word",
+        "parameters": {
+          "input_file": "string",
+          "include_formatting": "boolean"
+        },
+        "timeout": 15,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_word_extract_headings",
+        "name": "Word Headings Extractor",
+        "description": "Extracts document structure and headings from Word documents",
+        "capabilities": ["word_processing", "structure_extraction", "content_analysis"],
+        "type": "local_function",
+        "module_path": "tools.word_utilities",
+        "function": "extract_headings_from_word",
+        "parameters": {
+          "input_file": "string"
+        },
+        "timeout": 15,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_word_extract_tables",
+        "name": "Word Table Extractor",
+        "description": "Extracts all tables from Word documents",
+        "capabilities": ["word_processing", "table_extraction", "data_extraction"],
+        "type": "local_function",
+        "module_path": "tools.word_utilities",
+        "function": "extract_tables_from_word",
+        "parameters": {
+          "input_file": "string"
+        },
+        "timeout": 20,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_word_to_pdf",
+        "name": "Word to PDF Converter",
+        "description": "Converts Word documents to PDF format",
+        "capabilities": ["word_processing", "format_conversion", "document_conversion"],
+        "type": "local_function",
+        "module_path": "tools.word_utilities",
+        "function": "word_to_pdf",
+        "parameters": {
+          "input_file": "string",
+          "output_file": "string"
+        },
+        "timeout": 30,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_word_to_html",
+        "name": "Word to HTML Converter",
+        "description": "Converts Word documents to HTML format",
+        "capabilities": ["word_processing", "format_conversion", "web_publishing"],
+        "type": "local_function",
+        "module_path": "tools.word_utilities",
+        "function": "word_to_html",
+        "parameters": {
+          "input_file": "string",
+          "output_file": "string"
+        },
+        "timeout": 25,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_word_add_table",
+        "name": "Add Table to Word",
+        "description": "Adds tables to existing Word documents",
+        "capabilities": ["word_processing", "table_creation", "document_modification"],
+        "type": "local_function",
+        "module_path": "tools.word_utilities",
+        "function": "add_table_to_word",
+        "parameters": {
+          "input_file": "string",
+          "output_file": "string",
+          "table_data": "list",
+          "position": "string",
+          "style": "string"
+        },
+        "timeout": 20,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_word_info",
+        "name": "Word Document Information",
+        "description": "Retrieves metadata and statistics about Word documents",
+        "capabilities": ["word_processing", "metadata_extraction", "document_analysis"],
+        "type": "local_function",
+        "module_path": "tools.word_utilities",
+        "function": "get_word_document_info",
+        "parameters": {
+          "input_file": "string"
+        },
+        "timeout": 10,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_excel_read",
+        "name": "Excel Reader",
+        "description": "Reads data from Excel files with support for sheets and ranges",
+        "capabilities": ["excel_processing", "data_reading", "spreadsheet_analysis"],
+        "type": "local_function",
+        "module_path": "tools.excel_utilities",
+        "function": "read_excel",
+        "parameters": {
+          "input_file": "string",
+          "sheet_name": "string",
+          "cell_range": "string",
+          "as_dataframe": "boolean"
+        },
+        "timeout": 20,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_excel_create",
+        "name": "Excel Creator",
+        "description": "Creates new Excel files with formatted data and multiple sheets",
+        "capabilities": ["excel_processing", "spreadsheet_creation", "data_formatting"],
+        "type": "local_function",
+        "module_path": "tools.excel_utilities",
+        "function": "create_excel",
+        "parameters": {
+          "output_file": "string",
+          "data": "dict",
+          "headers": "list",
+          "sheet_name": "string",
+          "formatting": "dict"
+        },
+        "timeout": 30,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_excel_modify",
+        "name": "Excel Modifier",
+        "description": "Modifies existing Excel files with cell updates, row operations",
+        "capabilities": ["excel_processing", "spreadsheet_modification", "data_editing"],
+        "type": "local_function",
+        "module_path": "tools.excel_utilities",
+        "function": "modify_excel",
+        "parameters": {
+          "input_file": "string",
+          "output_file": "string",
+          "modifications": "list"
+        },
+        "timeout": 25,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_excel_pivot",
+        "name": "Excel Pivot Table Creator",
+        "description": "Creates pivot tables from Excel data for analysis",
+        "capabilities": ["excel_processing", "data_analysis", "pivot_tables"],
+        "type": "local_function",
+        "module_path": "tools.excel_utilities",
+        "function": "create_pivot_table",
+        "parameters": {
+          "input_file": "string",
+          "output_file": "string",
+          "sheet_name": "string",
+          "pivot_config": "dict"
+        },
+        "timeout": 40,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_excel_chart",
+        "name": "Excel Chart Generator",
+        "description": "Adds charts (bar, line, pie) to Excel files",
+        "capabilities": ["excel_processing", "data_visualization", "chart_creation"],
+        "type": "local_function",
+        "module_path": "tools.excel_utilities",
+        "function": "add_chart_to_excel",
+        "parameters": {
+          "input_file": "string",
+          "output_file": "string",
+          "chart_config": "dict"
+        },
+        "timeout": 25,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_excel_analyze",
+        "name": "Excel Data Analyzer",
+        "description": "Performs statistical analysis on Excel data",
+        "capabilities": ["excel_processing", "data_analysis", "statistics"],
+        "type": "local_function",
+        "module_path": "tools.excel_utilities",
+        "function": "analyze_excel_data",
+        "parameters": {
+          "input_file": "string",
+          "sheet_name": "string",
+          "analysis_type": "string"
+        },
+        "timeout": 30,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_excel_to_csv",
+        "name": "Excel to CSV Converter",
+        "description": "Converts Excel files to CSV format",
+        "capabilities": ["excel_processing", "format_conversion", "data_export"],
+        "type": "local_function",
+        "module_path": "tools.excel_utilities",
+        "function": "excel_to_csv",
+        "parameters": {
+          "input_file": "string",
+          "output_file": "string",
+          "sheet_name": "string"
+        },
+        "timeout": 20,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_excel_info",
+        "name": "Excel Information",
+        "description": "Retrieves metadata and information about Excel files",
+        "capabilities": ["excel_processing", "metadata_extraction", "file_analysis"],
+        "type": "local_function",
+        "module_path": "tools.excel_utilities",
+        "function": "get_excel_info",
+        "parameters": {
+          "input_file": "string"
+        },
+        "timeout": 10,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_excel_to_pdf",
+        "name": "Excel to PDF Converter",
+        "description": "Converts Excel spreadsheets to PDF format with formatted tables",
+        "capabilities": ["excel_processing", "format_conversion", "document_conversion", "excel_to_pdf"],
+        "type": "local_function",
+        "module_path": "tools.excel_utilities",
+        "function": "excel_to_pdf",
+        "parameters": {
+          "input_file": "string",
+          "output_file": "string",
+          "sheet_name": "string",
+          "include_all_sheets": "boolean"
+        },
+        "timeout": 45,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_email_generate",
+        "name": "Email Draft Generator",
+        "description": "Generates Outlook-compatible email drafts with recipients and content",
+        "capabilities": ["email_automation", "communication", "draft_creation"],
+        "type": "local_function",
+        "module_path": "tools.email_utilities",
+        "function": "generate_email_draft",
+        "parameters": {
+          "to": "string|list",
+          "subject": "string",
+          "body": "string",
+          "cc": "string|list",
+          "bcc": "string|list",
+          "attachments": "list",
+          "format": "string",
+          "priority": "string"
+        },
+        "timeout": 15,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_email_template",
+        "name": "Email Template Generator",
+        "description": "Creates emails from templates with data auto-fill for maintenance notifications",
+        "capabilities": ["email_automation", "template_processing", "notification_generation"],
+        "type": "local_function",
+        "module_path": "tools.email_utilities",
+        "function": "create_email_from_template",
+        "parameters": {
+          "template_name": "string",
+          "data": "dict",
+          "templates_dir": "string"
+        },
+        "timeout": 10,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_email_schedule",
+        "name": "Email Scheduler",
+        "description": "Schedules emails for future sending with recurrence support",
+        "capabilities": ["email_automation", "scheduling", "task_automation"],
+        "type": "local_function",
+        "module_path": "tools.email_utilities",
+        "function": "schedule_email",
+        "parameters": {
+          "email_draft": "dict",
+          "send_datetime": "string",
+          "recurrence": "string"
+        },
+        "timeout": 10,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_email_parse",
+        "name": "Email Parser",
+        "description": "Parses incoming emails to extract content and attachments",
+        "capabilities": ["email_automation", "content_extraction", "email_processing"],
+        "type": "local_function",
+        "module_path": "tools.email_utilities",
+        "function": "parse_email",
+        "parameters": {
+          "email_content": "string",
+          "parse_attachments": "boolean"
+        },
+        "timeout": 15,
+        "priority": 1,
+        "dependencies": []
+      },
+      {
+        "id": "tool_email_signature",
+        "name": "Email Signature Generator",
+        "description": "Generates HTML email signatures for professional communications",
+        "capabilities": ["email_automation", "formatting", "branding"],
+        "type": "local_function",
+        "module_path": "tools.email_utilities",
+        "function": "generate_email_signature",
+        "parameters": {
+          "name": "string",
+          "title": "string",
+          "company": "string",
+          "phone": "string",
+          "email": "string",
+          "website": "string"
+        },
+        "timeout": 5,
+        "priority": 1,
+        "dependencies": []
+      }
+    ]
+  },
+  "capability_index": {
+    "maintenance_planning": ["workflow_maintenance_checklist", "workflow_equipment_scheduler"],
+    "incident_analysis": ["workflow_incident_analyzer"],
+    "root_cause_analysis": ["workflow_incident_analyzer"],
+    "inventory_check": ["tool_parts_inventory"],
+    "equipment_lookup": ["tool_equipment_lookup"],
+    "safety_validation": ["tool_safety_validator"],
+    "cost_estimation": ["tool_cost_estimator"],
+    "document_search": ["tool_document_search"],
+    "natural_language_processing": ["dynamic"],
+    "analysis": ["dynamic"],
+    "checklist_generation": ["workflow_maintenance_checklist"],
+    "scheduling": ["workflow_equipment_scheduler", "tool_email_schedule"],
+    "pdf_processing": ["tool_pdf_merge", "tool_pdf_split", "tool_pdf_extract_text", "tool_pdf_extract_tables", "tool_pdf_convert", "tool_pdf_to_word", "tool_pdf_info"],
+    "document_merge": ["tool_pdf_merge"],
+    "document_split": ["tool_pdf_split"],
+    "text_extraction": ["tool_pdf_extract_text", "tool_word_extract_text"],
+    "table_extraction": ["tool_pdf_extract_tables", "tool_word_extract_tables"],
+    "data_extraction": ["tool_pdf_extract_tables", "tool_word_extract_tables"],
+    "ocr": ["tool_ocr_local", "tool_ocr_pdf_local", "tool_pdf_extract_text"],
+    "offline_processing": ["tool_ocr_local", "tool_ocr_pdf_local"],
+    "image_processing": ["tool_ocr_local"],
+    "format_conversion": ["tool_pdf_convert", "tool_pdf_to_word", "tool_word_to_pdf", "tool_word_to_html", "tool_excel_to_csv", "tool_excel_to_pdf"],
+    "document_conversion": ["tool_pdf_to_word", "tool_word_to_pdf", "tool_excel_to_pdf"],
+    "document_creation": ["tool_pdf_convert", "tool_word_create"],
+    "metadata_extraction": ["tool_pdf_info", "tool_word_info", "tool_excel_info"],
+    "document_analysis": ["tool_pdf_info"],
+    "word_processing": ["tool_word_create", "tool_word_extract_text", "tool_word_extract_headings", "tool_word_extract_tables", "tool_word_to_pdf", "tool_word_to_html", "tool_word_add_table", "tool_word_info"],
+    "content_formatting": ["tool_word_create"],
+    "content_analysis": ["tool_pdf_extract_text", "tool_word_extract_text", "tool_word_extract_headings"],
+    "structure_extraction": ["tool_word_extract_headings"],
+    "table_creation": ["tool_word_add_table"],
+    "document_modification": ["tool_word_add_table"],
+    "web_publishing": ["tool_word_to_html"],
+    "excel_processing": ["tool_excel_read", "tool_excel_create", "tool_excel_modify", "tool_excel_pivot", "tool_excel_chart", "tool_excel_analyze", "tool_excel_to_csv", "tool_excel_info", "tool_excel_to_pdf"],
+    "excel_to_pdf": ["tool_excel_to_pdf"],
+    "data_reading": ["tool_excel_read"],
+    "spreadsheet_analysis": ["tool_excel_read"],
+    "spreadsheet_creation": ["tool_excel_create"],
+    "data_formatting": ["tool_excel_create"],
+    "spreadsheet_modification": ["tool_excel_modify"],
+    "data_editing": ["tool_excel_modify"],
+    "data_analysis": ["tool_excel_pivot", "tool_excel_analyze"],
+    "pivot_tables": ["tool_excel_pivot"],
+    "data_visualization": ["tool_excel_chart"],
+    "chart_creation": ["tool_excel_chart"],
+    "statistics": ["tool_excel_analyze"],
+    "data_export": ["tool_excel_to_csv"],
+    "file_analysis": ["tool_excel_info"],
+    "email_automation": ["tool_email_generate", "tool_email_template", "tool_email_schedule", "tool_email_parse", "tool_email_signature"],
+    "communication": ["tool_email_generate"],
+    "draft_creation": ["tool_email_generate"],
+    "template_processing": ["tool_email_template"],
+    "notification_generation": ["tool_email_template"],
+    "task_automation": ["tool_email_schedule"],
+    "content_extraction": ["tool_email_parse"],
+    "email_processing": ["tool_email_parse"],
+    "formatting": ["tool_email_signature"],
+    "branding": ["tool_email_signature"],
+    "file_management": ["tool_pdf_merge", "tool_pdf_split"]
+  }
+}

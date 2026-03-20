@@ -1,0 +1,513 @@
+"""
+Document Generator for MAHER AI Orchestrator
+
+Generates professional documents (PDF, Word, Excel) from text content on-demand.
+Supports markdown parsing and intelligent content formatting.
+"""
+
+import os
+import re
+import tempfile
+import logging
+from datetime import datetime
+from typing import Dict, Any, Optional, List
+
+logger = logging.getLogger(__name__)
+
+
+def generate_document(
+    content: str,
+    format: str,
+    title: str = "Document",
+    metadata: Optional[Dict] = None
+) -> Dict[str, Any]:
+    """
+    Generate document from text content
+    
+    Args:
+        content: Text content to convert to document
+        format: Document format - 'pdf', 'word', or 'excel'
+        title: Document title
+        metadata: Additional metadata (agent_name, generated_at, etc.)
+    
+    Returns:
+        {
+            "success": True/False,
+            "filename": "document_123.pdf",
+            "download_url": "/api/documents/download/document_123.pdf",
+            "file_path": "/tmp/maher_docs/document_123.pdf",
+            "size": 45678,
+            "error": "Error message if failed"
+        }
+    """
+    
+    try:
+        # Create documents directory
+        docs_dir = os.path.join(tempfile.gettempdir(), 'maher_docs')
+        os.makedirs(docs_dir, exist_ok=True)
+        
+        # Generate unique filename
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        safe_title = sanitize_filename(title)
+        
+        if format.lower() == 'pdf':
+            filename = f"{safe_title}_{timestamp}.pdf"
+            file_path = os.path.join(docs_dir, filename)
+            result = generate_pdf(content, file_path, title, metadata or {})
+            
+        elif format.lower() in ['word', 'docx']:
+            filename = f"{safe_title}_{timestamp}.docx"
+            file_path = os.path.join(docs_dir, filename)
+            result = generate_word(content, file_path, title, metadata or {})
+            
+        elif format.lower() in ['excel', 'xlsx']:
+            filename = f"{safe_title}_{timestamp}.xlsx"
+            file_path = os.path.join(docs_dir, filename)
+            result = generate_excel(content, file_path, title, metadata or {})
+            
+        else:
+            return {
+                "success": False,
+                "error": f"Unsupported format: {format}. Supported: pdf, word, excel"
+            }
+        
+        if result.get('success'):
+            file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
+            return {
+                "success": True,
+                "filename": filename,
+                "download_url": f"/api/documents/download/{filename}",
+                "file_path": file_path,
+                "size": file_size
+            }
+        else:
+            return result
+            
+    except Exception as e:
+        logger.error(f"Document generation error: {str(e)}")
+        return {
+            "success": False,
+            "error": f"Document generation failed: {str(e)}"
+        }
+
+
+def generate_pdf(content: str, output_path: str, title: str, metadata: Dict) -> Dict[str, Any]:
+    """
+    Generate PDF document using reportlab
+    
+    Args:
+        content: Text content
+        output_path: Path for output PDF file
+        title: Document title
+        metadata: Metadata dictionary
+    
+    Returns:
+        Result dictionary with success status
+    """
+    
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import inch
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, Table, TableStyle
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
+        from reportlab.lib import colors
+        
+        # Create PDF document
+        doc = SimpleDocTemplate(
+            output_path,
+            pagesize=A4,
+            topMargin=0.75*inch,
+            bottomMargin=0.75*inch,
+            leftMargin=0.75*inch,
+            rightMargin=0.75*inch
+        )
+        
+        story = []
+        styles = getSampleStyleSheet()
+        
+        # Custom title style
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=20,
+            textColor=colors.HexColor('#1f4788'),
+            spaceAfter=20,
+            alignment=TA_CENTER,
+            fontName='Helvetica-Bold'
+        )
+        
+        # Add title
+        story.append(Paragraph(title, title_style))
+        story.append(Spacer(1, 0.2*inch))
+        
+        # Add metadata
+        if metadata:
+            meta_style = ParagraphStyle(
+                'MetaStyle',
+                parent=styles['Normal'],
+                fontSize=9,
+                textColor=colors.HexColor('#666666'),
+                spaceAfter=6
+            )
+            
+            if metadata.get('agent_name'):
+                story.append(Paragraph(f"<b>Generated by:</b> {metadata['agent_name']}", meta_style))
+            if metadata.get('generated_at'):
+                story.append(Paragraph(f"<b>Date:</b> {metadata['generated_at']}", meta_style))
+            
+            story.append(Spacer(1, 0.3*inch))
+        
+        # Parse and add content
+        content_elements = parse_markdown_to_pdf(content, styles)
+        story.extend(content_elements)
+        
+        # Build PDF
+        doc.build(story)
+        
+        return {"success": True}
+        
+    except ImportError as e:
+        return {
+            "success": False,
+            "error": f"PDF generation requires reportlab: {str(e)}"
+        }
+    except Exception as e:
+        logger.error(f"PDF generation failed: {str(e)}")
+        return {
+            "success": False,
+            "error": f"PDF generation failed: {str(e)}"
+        }
+
+
+def generate_word(content: str, output_path: str, title: str, metadata: Dict) -> Dict[str, Any]:
+    """
+    Generate Word document using python-docx
+    
+    Args:
+        content: Text content
+        output_path: Path for output Word file
+        title: Document title
+        metadata: Metadata dictionary
+    
+    Returns:
+        Result dictionary with success status
+    """
+    
+    try:
+        from tools.word_utilities import create_word_document
+        
+        # Parse markdown to Word structure
+        content_items = parse_markdown_to_word_structure(content)
+        
+        # Build structured content
+        structured_content = []
+        
+        # Add title
+        if title:
+            structured_content.append({
+                "type": "heading",
+                "text": title,
+                "level": 0
+            })
+        
+        # Add metadata
+        if metadata:
+            if metadata.get('agent_name'):
+                structured_content.append({
+                    "type": "paragraph",
+                    "text": f"Generated by: {metadata['agent_name']}"
+                })
+            if metadata.get('generated_at'):
+                structured_content.append({
+                    "type": "paragraph",
+                    "text": f"Date: {metadata['generated_at']}"
+                })
+            structured_content.append({"type": "paragraph", "text": ""})
+        
+        # Add parsed content
+        structured_content.extend(content_items)
+        
+        # Create Word document
+        result = create_word_document(
+            output_file=output_path,
+            title="",  # Already added in content
+            content=structured_content
+        )
+        
+        return result
+        
+    except ImportError as e:
+        return {
+            "success": False,
+            "error": f"Word generation requires python-docx: {str(e)}"
+        }
+    except Exception as e:
+        logger.error(f"Word generation failed: {str(e)}")
+        return {
+            "success": False,
+            "error": f"Word generation failed: {str(e)}"
+        }
+
+
+def generate_excel(content: str, output_path: str, title: str, metadata: Dict) -> Dict[str, Any]:
+    """
+    Generate Excel spreadsheet
+    
+    Args:
+        content: Text content
+        output_path: Path for output Excel file
+        title: Document title
+        metadata: Metadata dictionary
+    
+    Returns:
+        Result dictionary with success status
+    """
+    
+    try:
+        from tools.excel_utilities import create_excel
+        
+        # Extract tables from markdown
+        tables = extract_tables_from_markdown(content)
+        
+        if tables:
+            # Use first table
+            data = tables[0]['data']
+            headers = tables[0].get('headers')
+        else:
+            # No tables - create simple list
+            lines = [line.strip() for line in content.split('\n') if line.strip()]
+            data = [[line] for line in lines[:100]]  # Limit to 100 lines
+            headers = ["Content"]
+        
+        # Create Excel
+        result = create_excel(
+            output_file=output_path,
+            data=data,
+            headers=headers,
+            sheet_name=title[:31],  # Excel sheet name limit
+            formatting={"header_style": True, "auto_width": True}
+        )
+        
+        return result
+        
+    except ImportError as e:
+        return {
+            "success": False,
+            "error": f"Excel generation requires openpyxl: {str(e)}"
+        }
+    except Exception as e:
+        logger.error(f"Excel generation failed: {str(e)}")
+        return {
+            "success": False,
+            "error": f"Excel generation failed: {str(e)}"
+        }
+
+
+def parse_markdown_to_pdf(content: str, styles) -> List:
+    """
+    Parse markdown content to PDF elements (Paragraphs, Tables, etc.)
+    
+    Args:
+        content: Markdown text
+        styles: ReportLab styles
+    
+    Returns:
+        List of ReportLab flowable elements
+    """
+    
+    from reportlab.platypus import Paragraph, Spacer, Table, TableStyle
+    from reportlab.lib.units import inch
+    from reportlab.lib import colors
+    
+    elements = []
+    lines = content.split('\n')
+    i = 0
+    
+    while i < len(lines):
+        line = lines[i].strip()
+        
+        # Skip empty lines
+        if not line:
+            i += 1
+            continue
+        
+        # Headings
+        if line.startswith('###'):
+            text = line.replace('###', '').strip()
+            elements.append(Paragraph(text, styles['Heading3']))
+            elements.append(Spacer(1, 0.1*inch))
+        elif line.startswith('##'):
+            text = line.replace('##', '').strip()
+            elements.append(Paragraph(text, styles['Heading2']))
+            elements.append(Spacer(1, 0.15*inch))
+        elif line.startswith('#'):
+            text = line.replace('#', '').strip()
+            elements.append(Paragraph(text, styles['Heading1']))
+            elements.append(Spacer(1, 0.2*inch))
+        
+        # Bullet lists
+        elif line.startswith('- ') or line.startswith('* '):
+            text = line[2:].strip()
+            elements.append(Paragraph(f"• {text}", styles['Normal']))
+        
+        # Numbered lists
+        elif re.match(r'^\d+\.', line):
+            elements.append(Paragraph(line, styles['Normal']))
+        
+        # Regular paragraphs
+        else:
+            # Handle bold and italic
+            line = line.replace('**', '<b>').replace('**', '</b>')
+            line = line.replace('*', '<i>').replace('*', '</i>')
+            elements.append(Paragraph(line, styles['Normal']))
+            elements.append(Spacer(1, 0.05*inch))
+        
+        i += 1
+    
+    return elements
+
+
+def parse_markdown_to_word_structure(content: str) -> List[Dict]:
+    """
+    Parse markdown to Word document structure
+    
+    Args:
+        content: Markdown text
+    
+    Returns:
+        List of content item dictionaries
+    """
+    
+    items = []
+    lines = content.split('\n')
+    
+    for line in lines:
+        line_stripped = line.strip()
+        
+        if not line_stripped:
+            continue
+        
+        # Headings
+        if line_stripped.startswith('###'):
+            items.append({
+                "type": "heading",
+                "text": line_stripped.replace('###', '').strip(),
+                "level": 3
+            })
+        elif line_stripped.startswith('##'):
+            items.append({
+                "type": "heading",
+                "text": line_stripped.replace('##', '').strip(),
+                "level": 2
+            })
+        elif line_stripped.startswith('#'):
+            items.append({
+                "type": "heading",
+                "text": line_stripped.replace('#', '').strip(),
+                "level": 1
+            })
+        
+        # Bullet lists
+        elif line_stripped.startswith('- ') or line_stripped.startswith('* '):
+            if not items or items[-1].get('type') != 'bullet_list':
+                items.append({"type": "bullet_list", "items": []})
+            items[-1]["items"].append(line_stripped[2:].strip())
+        
+        # Numbered lists
+        elif re.match(r'^\d+\.', line_stripped):
+            if not items or items[-1].get('type') != 'numbered_list':
+                items.append({"type": "numbered_list", "items": []})
+            items[-1]["items"].append(re.sub(r'^\d+\.\s*', '', line_stripped))
+        
+        # Regular paragraphs
+        else:
+            items.append({
+                "type": "paragraph",
+                "text": line_stripped
+            })
+    
+    return items
+
+
+def extract_tables_from_markdown(content: str) -> List[Dict]:
+    """
+    Extract tables from markdown content
+    
+    Args:
+        content: Markdown text
+    
+    Returns:
+        List of table dictionaries with headers and data
+    """
+    
+    tables = []
+    lines = content.split('\n')
+    i = 0
+    
+    while i < len(lines):
+        line = lines[i].strip()
+        
+        # Check for markdown table (| column | column |)
+        if '|' in line and line.count('|') >= 3:
+            table_lines = [line]
+            i += 1
+            
+            # Collect table lines
+            while i < len(lines) and '|' in lines[i]:
+                table_lines.append(lines[i].strip())
+                i += 1
+            
+            if len(table_lines) >= 2:
+                # Parse table
+                headers = [cell.strip() for cell in table_lines[0].split('|') if cell.strip()]
+                
+                # Skip separator line (usually line 1)
+                data = []
+                for row_line in table_lines[2:]:
+                    cells = [cell.strip() for cell in row_line.split('|') if cell.strip()]
+                    if cells:
+                        data.append(cells)
+                
+                if data:
+                    tables.append({
+                        "headers": headers,
+                        "data": data
+                    })
+        else:
+            i += 1
+    
+    return tables
+
+
+def sanitize_filename(filename: str) -> str:
+    """
+    Remove invalid characters from filename
+    
+    Args:
+        filename: Original filename
+    
+    Returns:
+        Sanitized filename safe for filesystem
+    """
+    
+    # Remove invalid characters
+    filename = re.sub(r'[<>:"/\\|?*]', '', filename)
+    
+    # Replace spaces with underscores
+    filename = filename.replace(' ', '_')
+    
+    # Remove multiple underscores
+    filename = re.sub(r'_+', '_', filename)
+    
+    # Limit length
+    filename = filename[:50]
+    
+    # Remove leading/trailing underscores
+    filename = filename.strip('_')
+    
+    # Default if empty
+    if not filename:
+        filename = "document"
+    
+    return filename
