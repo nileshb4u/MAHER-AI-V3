@@ -71,188 +71,67 @@ const Chat: React.FC<ChatProps> = ({ messages, setMessages }) => {
     setIsLoading(true);
 
     try {
-      let orchestratorResponse;
+      let responseText = '';
+      let thinkingProcess: any = undefined;
+      let skillsUsed: string[] | undefined;
 
-      // If files are attached, use the file upload endpoint
+      // If files are attached, use the hybrid orchestrator file upload endpoint
       if (currentFiles.length > 0) {
         const formData = new FormData();
         formData.append('input', messageContent);
+        currentFiles.forEach(file => formData.append('files', file));
 
-        // Add all attached files
-        currentFiles.forEach(file => {
-          formData.append('files', file);
-        });
-
-        // Send to orchestrator with files
-        orchestratorResponse = await fetch('/api/hybrid-orchestrator/process-with-files', {
+        const resp = await fetch('/api/hybrid-orchestrator/process-with-files', {
           method: 'POST',
-          body: formData  // Don't set Content-Type - browser sets it with boundary
+          body: formData,
         });
+        if (!resp.ok) throw new Error('Orchestrator request failed');
+        const data = await resp.json();
+        responseText = data.answer || `Sorry, could not process the uploaded files.`;
+        thinkingProcess = data.thinking_process;
       } else {
-        // No files - use regular JSON endpoint
-        orchestratorResponse = await fetch('/api/hybrid-orchestrator/process', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            input: messageContent
-          })
-        });
-      }
+        // Text-only: try skills orchestrator first, fall back to hybrid
+        let skillsData: any = null;
+        try {
+          const skillsResp = await fetch('/api/skills-orchestrator/process', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: messageContent, history: [] }),
+          });
+          if (skillsResp.ok) {
+            skillsData = await skillsResp.json();
+          }
+        } catch (_) {
+          // skills orchestrator unavailable, fall through
+        }
 
-      if (!orchestratorResponse.ok) {
-        throw new Error('Orchestrator request failed');
-      }
-
-      const orchestratorData = await orchestratorResponse.json();
-
-      // Format response from hybrid orchestrator
-      let responseText = '';
-
-      if (orchestratorData.success) {
-        // NEW: Use the compiled answer if available
-        if (orchestratorData.answer) {
-          responseText = orchestratorData.answer;
+        if (skillsData?.success && skillsData?.answer) {
+          responseText = skillsData.answer;
+          thinkingProcess = skillsData.thinking_process;
+          skillsUsed = skillsData.skills_used?.length ? skillsData.skills_used : undefined;
         } else {
-          // Fallback to old manual parsing (for backwards compatibility)
-          const execution = orchestratorData.execution_summary;
-          const results = orchestratorData.results?.results || [];
-
-          // Show orchestrator header with resources used
-          if (results.length > 0) {
-            const resourcesUsed = results.map((r: any) => {
-              const type = r.type === 'workflow' ? '⚙️' : r.type === 'tool' ? '🔧' : '🤖';
-              return `${type} ${r.resource}`;
-            });
-
-            responseText += `**🎯 MAHER Hybrid Orchestrator**\n`;
-            responseText += `Strategy: ${execution?.strategy || 'sequential'} | `;
-            responseText += `Subtasks: ${execution?.successful || 0}/${execution?.total_subtasks || 0} successful\n`;
-            responseText += `Resources: ${resourcesUsed.join(', ')}\n`;
-
-            // Show files processed if any
-            if (orchestratorData.files_processed && orchestratorData.files_processed.length > 0) {
-              const filesInfo = orchestratorData.files_processed.map((f: any) => f.filename).join(', ');
-              responseText += `Files: ${filesInfo}\n`;
-            }
-
-            responseText += `\n---\n\n`;
-          }
-
-          // Format results
-          for (const result of results) {
-            const data = result.data;
-
-            if (data?.success) {
-              // Handle workflow/tool results
-              if (result.type === 'workflow' || result.type === 'tool') {
-                responseText += `### ${result.resource}\n\n`;
-
-                // Format different types of data
-                if (data.checklist_items) {
-                  responseText += `**Checklist Items:**\n`;
-                  data.checklist_items.forEach((item: string, idx: number) => {
-                    responseText += `${idx + 1}. ${item}\n`;
-                  });
-                  responseText += `\n`;
-
-                  if (data.safety_notes && data.safety_notes.length > 0) {
-                    responseText += `**Safety Notes:**\n`;
-                    data.safety_notes.forEach((note: string) => responseText += `- ${note}\n`);
-                    responseText += `\n`;
-                  }
-
-                  if (data.required_tools && data.required_tools.length > 0) {
-                    responseText += `**Required Tools:**\n`;
-                    data.required_tools.forEach((tool: string) => responseText += `- ${tool}\n`);
-                    responseText += `\n`;
-                  }
-
-                  if (data.estimated_duration_hours) {
-                    responseText += `**Estimated Duration:** ${data.estimated_duration_hours} hours\n\n`;
-                  }
-                } else if (data.equipment_id || data.name) {
-                  responseText += `**Equipment:** ${data.name || data.equipment_id}\n`;
-                  if (data.manufacturer) responseText += `**Manufacturer:** ${data.manufacturer}\n`;
-                  if (data.model) responseText += `**Model:** ${data.model}\n`;
-                  if (data.location) responseText += `**Location:** ${data.location}\n`;
-                  if (data.criticality) responseText += `**Criticality:** ${data.criticality}\n`;
-                  responseText += `\n`;
-                } else if (data.total_cost) {
-                  responseText += `**Cost Estimate:**\n`;
-                  responseText += `- Labor: $${data.cost_breakdown?.labor?.total || 0}\n`;
-                  responseText += `- Parts: $${data.cost_breakdown?.parts || 0}\n`;
-                  responseText += `- Downtime: $${data.cost_breakdown?.downtime || 0}\n`;
-                  responseText += `- **Total: $${data.total_cost}**\n`;
-                  responseText += `- Confidence: ${data.confidence_level}\n\n`;
-                } else if (data.identified_root_causes) {
-                  responseText += `**Root Causes:**\n`;
-                  data.identified_root_causes.forEach((cause: string) => responseText += `- ${cause}\n`);
-                  responseText += `\n`;
-
-                  if (data.recommendations && data.recommendations.length > 0) {
-                    responseText += `**Recommendations:**\n`;
-                    data.recommendations.forEach((rec: any) => {
-                      responseText += `- [${rec.priority}] ${rec.action}\n`;
-                    });
-                    responseText += `\n`;
-                  }
-                } else if (data.results) {
-                  responseText += `Found ${data.total_results || 0} results\n\n`;
-                  if (data.results.length > 0) {
-                    data.results.slice(0, 5).forEach((doc: any) => {
-                      responseText += `- **${doc.title}** (${doc.type}) - Rev ${doc.revision}\n`;
-                    });
-                  }
-                } else if (data.output_file || data.text || data.tables) {
-                  // Document processing results (PDF, Word, Excel, OCR)
-                  if (data.output_file) {
-                    responseText += `✅ **File created:** ${data.output_file}\n`;
-                    if (data.pages) responseText += `📄 **Pages:** ${data.pages}\n`;
-                    if (data.size) responseText += `💾 **Size:** ${(data.size / 1024).toFixed(2)} KB\n`;
-                  }
-                  if (data.text) {
-                    const preview = data.text.substring(0, 200);
-                    responseText += `**Extracted text:**\n${preview}${data.text.length > 200 ? '...' : ''}\n`;
-                  }
-                  if (data.tables && data.tables.length > 0) {
-                    responseText += `**Extracted tables:** ${data.tables.length} table(s)\n`;
-                  }
-                  if (data.rows) responseText += `**Rows:** ${data.rows}\n`;
-                  if (data.columns) responseText += `**Columns:** ${data.columns}\n`;
-                  responseText += `\n`;
-                } else {
-                  // Generic data display
-                  responseText += JSON.stringify(data, null, 2) + '\n\n';
-                }
-              } else if (result.type === 'ai_agent') {
-                // AI agent response
-                responseText += data.response || '';
-              }
-            } else {
-              responseText += `⚠️ ${result.resource} encountered an error\n\n`;
-            }
-          }
-
-          // Show incomplete tasks if any
-          if (orchestratorData.results?.incomplete_tasks?.length > 0) {
-            responseText += `\n---\n\n`;
-            responseText += `**⚠️ Incomplete Tasks:**\n`;
-            orchestratorData.results.incomplete_tasks.forEach((task: any) => {
-              responseText += `- ${task.resource}: ${task.error}\n`;
-            });
+          // Fall back to hybrid orchestrator
+          const hybridResp = await fetch('/api/hybrid-orchestrator/process', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ input: messageContent }),
+          });
+          if (!hybridResp.ok) throw new Error('Orchestrator request failed');
+          const hybridData = await hybridResp.json();
+          if (hybridData.success) {
+            responseText = hybridData.answer || 'No response generated.';
+            thinkingProcess = hybridData.thinking_process;
+          } else {
+            responseText = `Sorry, the orchestrator encountered an error: ${hybridData.error || 'Unknown error'}`;
           }
         }
-      } else {
-        // Error response
-        responseText = `Sorry, the orchestrator encountered an error: ${orchestratorData.error || 'Unknown error'}`;
       }
 
       const assistantResponse: Message = {
         role: 'assistant',
         content: responseText,
-        thinking_process: orchestratorData.thinking_process  // Include thinking trail
+        thinking_process: thinkingProcess,
+        skillsUsed,
       };
       setMessages(prev => {
         const newMessages = [...prev];
@@ -377,6 +256,19 @@ const Chat: React.FC<ChatProps> = ({ messages, setMessages }) => {
                 ) : (
                   <div className="prose prose-sm prose-invert max-w-none">
                     <Markdown>{msg.content}</Markdown>
+                  </div>
+                )}
+                {msg.role === 'assistant' && !msg.isThinking && msg.skillsUsed && msg.skillsUsed.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-brand-light-blue/10">
+                    <span className="text-xs text-brand-gray">Skills used:</span>
+                    {msg.skillsUsed.map((skill, si) => (
+                      <span key={si} className="px-2 py-0.5 text-xs bg-purple-500/15 text-purple-400 border border-purple-500/25 rounded-full flex items-center gap-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        {skill}
+                      </span>
+                    ))}
                   </div>
                 )}
                 {msg.role === 'assistant' && !msg.isThinking && msg.content && (

@@ -76,10 +76,37 @@ limiter = Limiter(
     storage_uri=os.environ.get('REDIS_URL', 'memory://')
 )
 
-# Initialize unified model client (MetaBrain primary, Gemini fallback)
-# No hard crash if keys are missing - graceful degradation
+# Initialize unified model client
+# Providers (in priority order based on MODEL_PROVIDER env var):
+#   gpt-oss   → self-hosted vLLM (Qwen 3 / GPT-OSS)  [set VLLM_SERVER_URL]
+#   metabrain → Aramco enterprise AI                  [set METABRAIN_CLIENT_ID/SECRET]
+#   gemini    → Google Gemini                         [set GEMINI_API_KEY]
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
-model_client: MAHERModelClient = get_model_client(gemini_api_key=GEMINI_API_KEY)
+model_client: MAHERModelClient = get_model_client(
+    gemini_api_key=GEMINI_API_KEY,
+    vllm_server_url=os.environ.get('VLLM_SERVER_URL', ''),
+    vllm_model_path=os.environ.get('VLLM_MODEL_PATH', '/home/cdsw/gpt-oss'),
+)
+
+# Skills Orchestrator — initialised lazily to avoid startup failure if
+# registry.json is temporarily absent during first deploy.
+_skills_orchestrator = None
+
+def get_skills_orchestrator():
+    """Return (creating once) the SkillsOrchestrator singleton."""
+    global _skills_orchestrator
+    if _skills_orchestrator is None:
+        registry_path = os.path.join(os.path.dirname(__file__), 'registry.json')
+        try:
+            from skills_orchestrator import SkillsOrchestrator
+            _skills_orchestrator = SkillsOrchestrator(
+                model_client=model_client,
+                registry_path=registry_path,
+            )
+            logger.info("SkillsOrchestrator initialised")
+        except Exception as exc:
+            logger.error(f"SkillsOrchestrator init failed: {exc}")
+    return _skills_orchestrator
 
 # Admin password configuration
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'maher_admin_2026')
@@ -602,6 +629,19 @@ def create_agent():
         # Generate unique agent ID
         agent_id = f"user-agent-{uuid.uuid4().hex[:12]}"
 
+        # Normalise tool_schema: accept dict or JSON string
+        raw_schema = data.get('toolSchema')
+        tool_schema_json = None
+        if raw_schema:
+            if isinstance(raw_schema, dict):
+                tool_schema_json = json.dumps(raw_schema)
+            elif isinstance(raw_schema, str):
+                try:
+                    json.loads(raw_schema)   # validate it's valid JSON
+                    tool_schema_json = raw_schema
+                except Exception:
+                    tool_schema_json = None
+
         # Create new agent
         agent = Agent(
             agent_id=agent_id,
@@ -617,7 +657,11 @@ def create_agent():
             is_system=False,
             created_by=data.get('createdBy', 'default_user'),
             network_id=data.get('networkId'),
-            department=data.get('department')
+            department=data.get('department'),
+            # Skill fields
+            tool_schema=tool_schema_json,
+            implementation_type=data.get('implementationType', 'llm_agent'),
+            skill_version=data.get('skillVersion', '1.0.0'),
         )
 
         db.add(agent)
@@ -697,6 +741,23 @@ def update_agent(agent_id: str):
             agent.network_id = data['networkId']
         if 'department' in data:
             agent.department = data['department']
+        # Skill fields
+        if 'toolSchema' in data:
+            raw = data['toolSchema']
+            if raw is None:
+                agent.tool_schema = None
+            elif isinstance(raw, dict):
+                agent.tool_schema = json.dumps(raw)
+            elif isinstance(raw, str):
+                try:
+                    json.loads(raw)
+                    agent.tool_schema = raw
+                except Exception:
+                    pass
+        if 'implementationType' in data:
+            agent.implementation_type = data['implementationType']
+        if 'skillVersion' in data:
+            agent.skill_version = data['skillVersion']
         if 'status' in data:
             # Convert string to enum
             status_value = data['status']
@@ -763,6 +824,16 @@ def publish_agent(agent_id: str):
         db.close()
 
         logger.info(f"Published agent: {agent.name} (ID: {agent.agent_id})")
+
+        # If this agent has a tool_schema it is now a skill — hot-reload retriever
+        if agent_dict.get('isSkill'):
+            try:
+                orch = get_skills_orchestrator()
+                if orch:
+                    orch.reload_skills()
+                    logger.info("SkillRetriever reloaded after agent publish")
+            except Exception as reload_err:
+                logger.warning(f"Skill retriever reload failed (non-fatal): {reload_err}")
 
         return jsonify({
             'success': True,
@@ -1674,6 +1745,144 @@ def list_models():
     except Exception as e:
         logger.error(f"Error fetching models: {str(e)}")
         return jsonify({'error': 'Failed to fetch models'}), 500
+
+
+# ============================================================================
+# Skills Orchestrator Endpoints  (GPT-OSS native function calling)
+# ============================================================================
+
+@app.route('/api/skills-orchestrator/process', methods=['POST'])
+@limiter.limit("30 per minute")
+def skills_orchestrator_process():
+    """
+    Process a request through the Skills Orchestrator.
+
+    The orchestrator semantically retrieves the 3-7 most relevant skill
+    schemas, injects only those into the 32 K context, and lets GPT-OSS
+    select and call skills via native function calling (ReAct loop).
+
+    Request body:
+        {
+            "input": "Generate a maintenance checklist for pump P-101",
+            "history": [{"role": "user", "content": "..."}, ...],  // optional
+            "system_prompt": "...",   // optional override
+            "stream": false           // optional
+        }
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        user_input = data.get('input', '').strip()
+        if not user_input:
+            return jsonify({'error': 'input is required'}), 400
+
+        history       = data.get('history', [])
+        system_prompt = data.get('system_prompt', '')
+
+        orchestrator = get_skills_orchestrator()
+        if orchestrator is None:
+            return jsonify({'error': 'SkillsOrchestrator unavailable'}), 503
+
+        result = orchestrator.process(
+            user_message=user_input,
+            conversation_history=history,
+            system_prompt=system_prompt,
+        )
+
+        return jsonify(result)
+
+    except Exception as exc:
+        logger.error(f"skills_orchestrator_process error: {exc}", exc_info=True)
+        return jsonify({'error': str(exc)}), 500
+
+
+@app.route('/api/skills-orchestrator/reload', methods=['POST'])
+@limiter.limit("10 per minute")
+def skills_orchestrator_reload():
+    """
+    Hot-reload the skills registry without restarting the server.
+    Call this after AI Studio publishes a new skill.
+    Requires admin session.
+    """
+    if not session.get('is_admin'):
+        return jsonify({'error': 'Admin access required'}), 403
+
+    orchestrator = get_skills_orchestrator()
+    if orchestrator is None:
+        return jsonify({'error': 'SkillsOrchestrator unavailable'}), 503
+
+    result = orchestrator.reload_skills()
+    return jsonify(result)
+
+
+@app.route('/api/skills/generate-schema', methods=['POST'])
+@limiter.limit("30 per minute")
+def generate_skill_schema_endpoint():
+    """
+    AI Studio helper: generate an OpenAI tool_schema from agent wizard data.
+
+    Request body:
+        {
+            "name":              "Pump Seal Replacement Guide",
+            "category":          "maintenance",
+            "taskDefinition":    "Guide technicians through centrifugal pump seal replacement",
+            "requiredExpertise": "Centrifugal pump mechanics, LOTO procedures",
+            "decisionAuthority": "Can recommend procedures, must escalate safety concerns"
+        }
+
+    Response:
+        { "success": true, "tool_schema": {...} }
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        name = data.get('name', '').strip()
+        if not name:
+            return jsonify({'error': 'name is required'}), 400
+
+        from skill_schema_generator import generate_skill_schema
+        result = generate_skill_schema(
+            model_client=model_client,
+            name=name,
+            category=data.get('category', 'other'),
+            task_definition=data.get('taskDefinition', ''),
+            required_expertise=data.get('requiredExpertise', ''),
+            decision_authority=data.get('decisionAuthority', ''),
+        )
+        return jsonify(result), 200 if result['success'] else 500
+
+    except Exception as exc:
+        logger.error(f"generate_skill_schema_endpoint error: {exc}", exc_info=True)
+        return jsonify({'success': False, 'error': str(exc)}), 500
+
+
+@app.route('/api/skills/agents', methods=['GET'])
+@limiter.limit("60 per minute")
+def get_skill_agents():
+    """
+    Return published agents that have a tool_schema (i.e. are registered skills).
+    Used by the Toolroom's Skills filter and by the orchestrator at runtime.
+    """
+    try:
+        db = SessionLocal()
+        agents = (
+            db.query(Agent)
+            .filter(
+                Agent.status == AgentStatus.PUBLISHED,
+                Agent.tool_schema.isnot(None),
+            )
+            .all()
+        )
+        result = [a.to_dict() for a in agents]
+        db.close()
+        return jsonify({'success': True, 'skills': result, 'count': len(result)})
+    except Exception as exc:
+        logger.error(f"get_skill_agents error: {exc}")
+        return jsonify({'success': False, 'error': str(exc)}), 500
 
 
 # ============================================================================

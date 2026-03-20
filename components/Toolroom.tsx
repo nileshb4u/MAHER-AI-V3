@@ -7,6 +7,7 @@ import { apiClient, AgentData } from '../client';
 const Toolroom: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [skillsOnly, setSkillsOnly] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -35,6 +36,10 @@ const Toolroom: React.FC = () => {
           displayProviderName: agentData.displayProviderName,
           statusText: agentData.statusText,
           statusClass: agentData.statusClass,
+          toolSchema: agentData.toolSchema || null,
+          implementationType: agentData.implementationType || 'llm_agent',
+          skillVersion: agentData.skillVersion || '1.0.0',
+          isSkill: agentData.isSkill || false,
         }));
 
         setAgents(agentsData);
@@ -54,9 +59,10 @@ const Toolroom: React.FC = () => {
       const matchesSearch = agent.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         agent.description.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesCategory = categoryFilter === '' || agent.category === categoryFilter;
-      return matchesSearch && matchesCategory;
+      const matchesSkillFilter = !skillsOnly || agent.isSkill;
+      return matchesSearch && matchesCategory && matchesSkillFilter;
     });
-  }, [agents, searchTerm, categoryFilter]);
+  }, [agents, searchTerm, categoryFilter, skillsOnly]);
 
   const handleLaunchAgent = (agent: Agent) => {
     setSelectedAgent(agent);
@@ -95,6 +101,19 @@ const Toolroom: React.FC = () => {
                 <option value="safety">Safety & Compliance</option>
                 <option value="projects">Project Management</option>
               </select>
+              <button
+                onClick={() => setSkillsOnly(!skillsOnly)}
+                className={`flex items-center gap-2 px-4 py-3 rounded-lg border text-sm font-semibold transition-colors whitespace-nowrap ${
+                  skillsOnly
+                    ? 'bg-purple-500/20 border-purple-500/50 text-purple-300'
+                    : 'bg-brand-blue border-brand-light-blue/30 text-brand-gray hover:border-purple-500/40 hover:text-purple-300'
+                }`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                Skills Only
+              </button>
             </div>
           </div>
         </section>

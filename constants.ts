@@ -51,7 +51,26 @@ export const AGENTS_DATA: Agent[] = [
     iconSVG: '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5M9 11.25v1.5M12 9v3.75m3-6v6" /></svg>',
     iconBackgroundColor: '#2563eb',
     defaultProvider: 'MAHER AI Engine',
-    displayProviderName: 'Powered by MAHER AI'
+    displayProviderName: 'Powered by MAHER AI',
+    implementationType: 'llm_agent',
+    skillVersion: '1.0.0',
+    isSkill: true,
+    toolSchema: {
+      type: 'function',
+      function: {
+        name: 'schematic_analyst',
+        description: 'Analyze technical schematics, P&IDs, and electrical diagrams to answer maintenance engineering questions about components, circuits, and pipelines.',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: 'The specific question about the schematic or diagram' },
+            diagram_type: { type: 'string', description: 'Type of diagram: P&ID, electrical, mechanical, or general', enum: ['P&ID', 'electrical', 'mechanical', 'general'] },
+            component_id: { type: 'string', description: 'Specific component tag or ID to focus on (optional)' },
+          },
+          required: ['query'],
+        },
+      },
+    },
   },
   {
     id: 'agent-2',
@@ -64,7 +83,27 @@ export const AGENTS_DATA: Agent[] = [
     iconSVG: '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg>',
     iconBackgroundColor: '#db2777',
     defaultProvider: 'MAHER AI Engine',
-    displayProviderName: 'Powered by MAHER AI'
+    displayProviderName: 'Powered by MAHER AI',
+    implementationType: 'llm_agent',
+    skillVersion: '1.0.0',
+    isSkill: true,
+    toolSchema: {
+      type: 'function',
+      function: {
+        name: 'procedure_writer',
+        description: 'Generate step-by-step Standard Operating Procedures (SOPs) and maintenance routines for industrial equipment tasks including required tools, PPE, and safety warnings.',
+        parameters: {
+          type: 'object',
+          properties: {
+            task_description: { type: 'string', description: 'Description of the maintenance task or procedure to write' },
+            equipment_type: { type: 'string', description: 'Type of equipment (e.g., pump, compressor, valve, heat exchanger)' },
+            skill_level: { type: 'string', description: 'Target audience skill level', enum: ['trainee', 'technician', 'engineer'] },
+            include_loto: { type: 'boolean', description: 'Whether to include Lock-Out/Tag-Out (LOTO) steps' },
+          },
+          required: ['task_description'],
+        },
+      },
+    },
   },
   {
     id: 'agent-3',
@@ -77,7 +116,26 @@ export const AGENTS_DATA: Agent[] = [
     iconSVG: '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>',
     iconBackgroundColor: '#ca8a04',
     defaultProvider: 'MAHER AI Engine',
-    displayProviderName: 'Powered by MAHER AI'
+    displayProviderName: 'Powered by MAHER AI',
+    implementationType: 'llm_agent',
+    skillVersion: '1.0.0',
+    isSkill: true,
+    toolSchema: {
+      type: 'function',
+      function: {
+        name: 'incident_report_analyzer',
+        description: 'Analyze safety incident reports to identify root causes using 5-Whys methodology and generate corrective and preventive actions (CAPAs) for industrial safety management.',
+        parameters: {
+          type: 'object',
+          properties: {
+            incident_text: { type: 'string', description: 'Full text of the incident report to analyze' },
+            analysis_depth: { type: 'string', description: 'Depth of root cause analysis', enum: ['summary', 'standard', 'detailed'] },
+            focus_area: { type: 'string', description: 'Specific aspect to focus on: equipment, human_factors, procedures, or environment' },
+          },
+          required: ['incident_text'],
+        },
+      },
+    },
   },
   {
     id: 'agent-4',
@@ -90,7 +148,26 @@ export const AGENTS_DATA: Agent[] = [
     iconSVG: '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>',
     iconBackgroundColor: '#4f46e5',
     defaultProvider: 'MAHER AI Engine',
-    displayProviderName: 'Powered by MAHER AI'
+    displayProviderName: 'Powered by MAHER AI',
+    implementationType: 'llm_agent',
+    skillVersion: '1.0.0',
+    isSkill: true,
+    toolSchema: {
+      type: 'function',
+      function: {
+        name: 'contracts_assistant',
+        description: 'Review commercial contracts to highlight key clauses (liability, indemnity, termination, payment), identify risks, and answer questions about contract terms and conditions.',
+        parameters: {
+          type: 'object',
+          properties: {
+            contract_text: { type: 'string', description: 'The contract or clause text to review' },
+            analysis_type: { type: 'string', description: 'Type of analysis to perform', enum: ['full_review', 'risk_assessment', 'clause_summary', 'specific_query'] },
+            specific_question: { type: 'string', description: 'Specific question about the contract (optional)' },
+          },
+          required: ['contract_text', 'analysis_type'],
+        },
+      },
+    },
   },
   {
     id: 'agent-5',
@@ -103,7 +180,27 @@ export const AGENTS_DATA: Agent[] = [
     iconSVG: '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6a7.5 7.5 0 100 15 7.5 7.5 0 000-15zM21 21l-5.25-5.25" /></svg>',
     iconBackgroundColor: '#059669',
     defaultProvider: 'MAHER AI Engine',
-    displayProviderName: 'Powered by MAHER AI'
+    displayProviderName: 'Powered by MAHER AI',
+    implementationType: 'llm_agent',
+    skillVersion: '1.0.0',
+    isSkill: true,
+    toolSchema: {
+      type: 'function',
+      function: {
+        name: 'operations_copilot',
+        description: 'Troubleshoot plant alarms and process deviations for industrial operations, providing prioritized steps to restore process stability while maintaining safety.',
+        parameters: {
+          type: 'object',
+          properties: {
+            alarm_description: { type: 'string', description: 'Description of the alarm or process deviation observed' },
+            unit_name: { type: 'string', description: 'Name or ID of the process unit or equipment involved' },
+            current_parameters: { type: 'string', description: 'Current process parameter readings (optional)' },
+            urgency: { type: 'string', description: 'Urgency level of the situation', enum: ['low', 'medium', 'high', 'critical'] },
+          },
+          required: ['alarm_description'],
+        },
+      },
+    },
   },
   {
     id: 'agent-6',
@@ -116,7 +213,27 @@ export const AGENTS_DATA: Agent[] = [
     iconSVG: '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0h18M-4.5 12h22.5" /></svg>',
     iconBackgroundColor: '#6d28d9',
     defaultProvider: 'MAHER AI Engine',
-    displayProviderName: 'Powered by MAHER AI'
+    displayProviderName: 'Powered by MAHER AI',
+    implementationType: 'llm_agent',
+    skillVersion: '1.0.0',
+    isSkill: true,
+    toolSchema: {
+      type: 'function',
+      function: {
+        name: 'project_planner',
+        description: 'Create project plans, WBS, Gantt timelines, and resource allocation schedules for industrial maintenance turnarounds and shutdown projects.',
+        parameters: {
+          type: 'object',
+          properties: {
+            scope_of_work: { type: 'string', description: 'Description of the maintenance or project scope' },
+            duration_days: { type: 'number', description: 'Expected project duration in days' },
+            team_size: { type: 'number', description: 'Available team size (number of personnel)' },
+            output_format: { type: 'string', description: 'Desired output format', enum: ['wbs', 'gantt', 'resource_plan', 'full_plan'] },
+          },
+          required: ['scope_of_work'],
+        },
+      },
+    },
   },
 ];
 

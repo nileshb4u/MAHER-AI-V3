@@ -28,6 +28,7 @@ export interface Message {
   content: string;
   isThinking?: boolean;
   thinking_process?: ThinkingStep[];
+  skillsUsed?: string[];   // skill names invoked by the orchestrator for this message
 }
 
 export enum TaskStatus {
@@ -41,6 +42,30 @@ export interface AgentTask {
   label: string;
   status: TaskStatus;
 }
+
+// ── Skill schema types (OpenAI function-calling format) ────────────────────
+
+export interface SkillParameterDef {
+  type: 'string' | 'number' | 'integer' | 'boolean' | 'array' | 'object';
+  description: string;
+  enum?: string[];
+  items?: { type: string };
+}
+
+export interface SkillSchema {
+  type: 'function';
+  function: {
+    name: string;
+    description: string;
+    parameters: {
+      type: 'object';
+      properties: Record<string, SkillParameterDef>;
+      required: string[];
+    };
+  };
+}
+
+// ── Agent / Skill ──────────────────────────────────────────────────────────
 
 export interface Agent {
   id: string;
@@ -56,6 +81,12 @@ export interface Agent {
   displayProviderName: string;
   networkId?: string;
   department?: string;
+
+  // Skill fields — present when this agent has been promoted to a skill
+  toolSchema?: SkillSchema | null;
+  implementationType?: 'llm_agent' | 'rag_pipeline' | 'workflow' | 'local_function';
+  skillVersion?: string;
+  isSkill?: boolean;     // true when toolSchema is present and published
 }
 
 export interface WizardData {
