@@ -27,7 +27,30 @@
         "execution_type": "async",
         "timeout": 30,
         "priority": 2,
-        "dependencies": []
+        "dependencies": [],
+        "status": "published",
+        "tool_schema": {
+          "type": "function",
+          "function": {
+            "name": "generate_maintenance_checklist",
+            "description": "Generates a comprehensive step-by-step maintenance checklist for a piece of equipment. Use this when the user asks for a maintenance checklist, procedure list, or inspection steps.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "equipment_type": {
+                  "type": "string",
+                  "description": "Type of equipment (e.g. centrifugal pump, gas compressor, heat exchanger, motor)"
+                },
+                "maintenance_level": {
+                  "type": "string",
+                  "enum": ["routine", "preventive", "corrective"],
+                  "description": "Level of maintenance: routine (daily checks), preventive (scheduled), corrective (after failure)"
+                }
+              },
+              "required": ["equipment_type", "maintenance_level"]
+            }
+          }
+        }
       },
       {
         "id": "workflow_incident_analyzer",
@@ -42,7 +65,34 @@
         "execution_type": "async",
         "timeout": 45,
         "priority": 2,
-        "dependencies": []
+        "dependencies": [],
+        "status": "published",
+        "tool_schema": {
+          "type": "function",
+          "function": {
+            "name": "analyze_incident_report",
+            "description": "Analyzes a maintenance or safety incident report to extract root causes, contributing factors, and corrective action recommendations. Use when the user describes an incident, failure, or near-miss.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "incident_description": {
+                  "type": "string",
+                  "description": "Full description of the incident including what happened, when, where, and equipment involved"
+                },
+                "equipment_id": {
+                  "type": "string",
+                  "description": "Equipment tag or ID involved in the incident (optional)"
+                },
+                "severity": {
+                  "type": "string",
+                  "enum": ["low", "medium", "high", "critical"],
+                  "description": "Reported severity of the incident"
+                }
+              },
+              "required": ["incident_description"]
+            }
+          }
+        }
       },
       {
         "id": "workflow_equipment_scheduler",
@@ -91,7 +141,29 @@
         },
         "timeout": 5,
         "priority": 1,
-        "dependencies": []
+        "dependencies": [],
+        "status": "published",
+        "tool_schema": {
+          "type": "function",
+          "function": {
+            "name": "lookup_equipment",
+            "description": "Retrieves technical specifications, operating parameters, and maintenance manuals for a specific piece of equipment by its tag ID. Use when the user asks about equipment specs, ratings, or technical data.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "equipment_id": {
+                  "type": "string",
+                  "description": "Equipment tag ID or name (e.g. P-101, C-201, HE-305)"
+                },
+                "include_manuals": {
+                  "type": "boolean",
+                  "description": "Whether to include links to maintenance manuals (default: false)"
+                }
+              },
+              "required": ["equipment_id"]
+            }
+          }
+        }
       },
       {
         "id": "tool_safety_validator",
@@ -107,7 +179,29 @@
         },
         "timeout": 15,
         "priority": 1,
-        "dependencies": []
+        "dependencies": [],
+        "status": "published",
+        "tool_schema": {
+          "type": "function",
+          "function": {
+            "name": "validate_safety_procedure",
+            "description": "Validates a maintenance procedure against Saudi Aramco safety standards (GI, SAES) and international standards (OSHA, ISO). Returns compliance score and missing safety steps such as LOTO, PPE requirements, and permit-to-work. Use whenever the user submits a procedure for safety review.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "procedure_text": {
+                  "type": "string",
+                  "description": "The full text of the maintenance procedure to validate"
+                },
+                "equipment_type": {
+                  "type": "string",
+                  "description": "Type of equipment the procedure applies to (e.g. rotating equipment, pressure vessel, electrical)"
+                }
+              },
+              "required": ["procedure_text", "equipment_type"]
+            }
+          }
+        }
       },
       {
         "id": "tool_cost_estimator",
@@ -124,7 +218,33 @@
         },
         "timeout": 10,
         "priority": 1,
-        "dependencies": []
+        "dependencies": [],
+        "status": "published",
+        "tool_schema": {
+          "type": "function",
+          "function": {
+            "name": "estimate_maintenance_cost",
+            "description": "Calculates estimated total cost for a maintenance activity including labor hours, spare parts, and production downtime losses. Use when the user asks about cost, budget, or financial impact of maintenance.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "maintenance_type": {
+                  "type": "string",
+                  "description": "Type of maintenance activity (e.g. bearing replacement, seal overhaul, annual shutdown)"
+                },
+                "equipment_id": {
+                  "type": "string",
+                  "description": "Equipment tag ID (e.g. P-101)"
+                },
+                "duration_hours": {
+                  "type": "number",
+                  "description": "Estimated duration of the maintenance activity in hours"
+                }
+              },
+              "required": ["maintenance_type", "equipment_id", "duration_hours"]
+            }
+          }
+        }
       },
       {
         "id": "tool_document_search",
@@ -140,7 +260,30 @@
         },
         "timeout": 20,
         "priority": 1,
-        "dependencies": []
+        "dependencies": [],
+        "status": "published",
+        "tool_schema": {
+          "type": "function",
+          "function": {
+            "name": "search_technical_documents",
+            "description": "Searches the internal technical documentation library including SOPs, GIs, engineering standards, equipment manuals, and procedures. Use when the user asks about a standard, procedure, or technical reference document.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "query": {
+                  "type": "string",
+                  "description": "Search query describing what document or information is needed"
+                },
+                "doc_types": {
+                  "type": "array",
+                  "items": {"type": "string"},
+                  "description": "Filter by document types: ['manual', 'sop', 'gi', 'saes', 'procedure', 'drawing']. Leave empty to search all."
+                }
+              },
+              "required": ["query"]
+            }
+          }
+        }
       },
       {
         "id": "tool_pdf_merge",
