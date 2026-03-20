@@ -23,6 +23,12 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+try:
+    import yaml
+    _YAML_AVAILABLE = True
+except ImportError:
+    _YAML_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -146,6 +152,113 @@ class SkillRetriever:
                     self._schemas.append(schema)
                     self._texts.append(_tool_schema_text(schema))
 
+        # Also load from the skills/ folder (Markdown files with YAML frontmatter)
+        skills_dir = self.registry_path.parent / "skills"
+        if skills_dir.is_dir():
+            self._load_skill_files(skills_dir)
+
+    def _load_skill_files(self, skills_dir: Path) -> None:
+        """
+        Scan *skills_dir* for *.md files, parse YAML frontmatter, and
+        register any entry that contains a ``tool_schema`` block.
+
+        File format
+        -----------
+        ---
+        id: agent-1
+        name: Schematic Analyst
+        description: ...
+        category: maintenance
+        icon_color: "#2563eb"
+        status: available          # published | available | draft
+        implementation_type: llm_agent
+        tool_schema:
+          type: function
+          function:
+            name: schematic_analyst
+            description: ...
+            parameters: ...
+        ---
+
+        The markdown body (below the closing ---) becomes the system_prompt.
+        """
+        if not _YAML_AVAILABLE:
+            logger.warning(
+                "SkillRetriever: PyYAML not available — cannot load .md skill files. "
+                "Install with: pip install pyyaml"
+            )
+            return
+
+        loaded = 0
+        for md_file in sorted(skills_dir.glob("*.md")):
+            try:
+                raw = md_file.read_text(encoding="utf-8")
+
+                # Split frontmatter from body
+                # Supports --- delimited YAML at the top of the file
+                fm_match = re.match(
+                    r"^\s*---\s*\n(.*?)\n---\s*\n?(.*)",
+                    raw,
+                    re.DOTALL,
+                )
+                if not fm_match:
+                    logger.debug(
+                        f"SkillRetriever: {md_file.name} has no YAML frontmatter, skipping"
+                    )
+                    continue
+
+                fm_text, body = fm_match.group(1), fm_match.group(2).strip()
+                meta = yaml.safe_load(fm_text)
+
+                if not isinstance(meta, dict):
+                    continue
+
+                # Skip drafts
+                status = str(meta.get("status", "available")).lower()
+                if status == "draft":
+                    continue
+
+                schema = meta.get("tool_schema")
+                if not schema:
+                    logger.debug(
+                        f"SkillRetriever: {md_file.name} has no tool_schema, skipping"
+                    )
+                    continue
+
+                entry = {
+                    "id":                  meta.get("id", md_file.stem),
+                    "name":                meta.get("name", md_file.stem),
+                    "description":         meta.get("description", ""),
+                    "category":            meta.get("category", "other"),
+                    "icon_color":          meta.get("icon_color", "#4f46e5"),
+                    "status":              status,
+                    "implementation_type": meta.get("implementation_type", "llm_agent"),
+                    "skill_version":       str(meta.get("version", "1.0.0")),
+                    "system_prompt":       body,
+                    "source":              "skill_file",
+                    "file":                str(md_file),
+                    "tool_schema":         schema,
+                    # Skill execution: llm_agent skills are dispatched by the
+                    # orchestrator itself (no module_path needed).
+                    "module_path":         meta.get("module_path"),
+                    "function":            meta.get("function"),
+                }
+
+                self._skills.append(entry)
+                self._schemas.append(schema)
+                self._texts.append(_tool_schema_text(schema))
+                loaded += 1
+
+            except Exception as exc:
+                logger.warning(
+                    f"SkillRetriever: failed to load {md_file.name}: {exc}"
+                )
+
+        if loaded:
+            logger.info(
+                f"SkillRetriever: loaded {loaded} skills from {skills_dir}"
+            )
+
     def _build_embeddings(self) -> None:
         if self._texts:
             self._embeddings = self._encoder.encode(
@@ -221,6 +334,12 @@ class SkillRetriever:
     def execute(self, tool_name: str, args: Dict[str, Any]) -> Any:
         """
         Dynamically import and call the skill implementation.
+
+        For ``llm_agent`` skills loaded from .md files there is no Python
+        module — the orchestrator handles them via a model call using the
+        skill's ``system_prompt``.  In that case we return the metadata so
+        the caller can dispatch appropriately.
+
         Falls back to an informative error dict on any failure.
         """
         import importlib
@@ -228,6 +347,16 @@ class SkillRetriever:
         meta = self.get_skill_meta(tool_name)
         if not meta:
             return {"error": f"Skill '{tool_name}' not found in registry"}
+
+        # LLM-agent skills (from .md files) have no module_path
+        impl_type = meta.get("implementation_type", "llm_agent")
+        if impl_type == "llm_agent" and not meta.get("module_path"):
+            return {
+                "__type__":     "llm_agent",
+                "system_prompt": meta.get("system_prompt", ""),
+                "args":          args,
+                "skill_name":    tool_name,
+            }
 
         module_path   = meta.get("module_path")
         function_name = meta.get("function")
